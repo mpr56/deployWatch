@@ -11,6 +11,9 @@ import {
 } from "@tanstack/react-query";
 
 import type {
+  MonthlyReport,
+  PublicStatus,
+  StatusPageConfig,
   AlertConfig,
   AlertChannel,
   Check,
@@ -203,5 +206,53 @@ export function useTestAlert() {
   return useMutation({
     mutationFn: (id: number) =>
       request<{ ok: boolean }>(`/alerts/${id}/test`, { method: "POST" }),
+  });
+}
+
+// --- v3: status pages & reports --------------------------------------------
+
+export function usePublicStatus(slug: string) {
+  return useQuery({
+    queryKey: ["public-status", slug],
+    queryFn: () => request<PublicStatus>(`/status/${slug}`),
+    refetchInterval: 60_000,
+    retry: false,
+  });
+}
+
+export function useStatusPages() {
+  return useQuery({
+    queryKey: ["status-pages"],
+    queryFn: () => request<StatusPageConfig[]>("/status-pages"),
+  });
+}
+
+type StatusPageBody = Omit<StatusPageConfig, "id">;
+
+export function useSaveStatusPage() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...body }: StatusPageBody & { id?: number }) =>
+      request<StatusPageConfig>(id ? `/status-pages/${id}` : "/status-pages", {
+        method: id ? "PUT" : "POST",
+        body: JSON.stringify(body),
+      }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["status-pages"] }),
+  });
+}
+
+export function useDeleteStatusPage() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) =>
+      request<void>(`/status-pages/${id}`, { method: "DELETE" }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["status-pages"] }),
+  });
+}
+
+export function useMonthlyReport(month: string, sla: number) {
+  return useQuery({
+    queryKey: ["report", month, sla],
+    queryFn: () => request<MonthlyReport>(`/reports/monthly?month=${month}&sla=${sla}`),
   });
 }

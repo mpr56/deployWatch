@@ -9,11 +9,12 @@ from __future__ import annotations
 
 import enum
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 
 from sqlalchemy import (
     BigInteger,
     Boolean,
+    Date,
     DateTime,
     ForeignKey,
     Integer,
@@ -60,6 +61,13 @@ class Monitor(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
+    )
+    ssl_expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    ssl_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    ssl_checked_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
     )
 
     checks: Mapped[list[Check]] = relationship(
@@ -137,3 +145,41 @@ class SentAlert(Base):
     sent_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
+
+
+class StatusPage(Base):
+    __tablename__ = "status_pages"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    slug: Mapped[str] = mapped_column(Text, unique=True)
+    title: Mapped[str] = mapped_column(Text)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+
+class StatusPageMonitor(Base):
+    __tablename__ = "status_page_monitors"
+
+    status_page_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("status_pages.id", ondelete="CASCADE"), primary_key=True
+    )
+    monitor_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("monitors.id", ondelete="CASCADE"), primary_key=True
+    )
+    position: Mapped[int] = mapped_column(Integer, default=0)
+
+
+class DailyUptime(Base):
+    __tablename__ = "daily_uptime"
+
+    monitor_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("monitors.id", ondelete="CASCADE"), primary_key=True
+    )
+    day: Mapped[date] = mapped_column(Date, primary_key=True)
+    total: Mapped[int] = mapped_column(Integer)
+    up: Mapped[int] = mapped_column(Integer)
+    degraded: Mapped[int] = mapped_column(Integer)
+    down: Mapped[int] = mapped_column(Integer)
+    avg_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)

@@ -27,6 +27,7 @@ import {
   useChecks,
   useDeleteMonitor, useIncidents, useMonitor } from "../lib/api";
 import { duration, ms, relativeTime, uptime } from "../lib/format";
+import { sslDaysLeft, sslWarning } from "../lib/ssl";
 import type { TimeRange } from "../types";
 
 function Stat({ label, value }: { label: string; value: string }) {
@@ -73,6 +74,14 @@ export function MonitorDetail() {
             </a>{" "}
             · every {monitor.data.interval_secs}s · expects{" "}
             {monitor.data.expected_status}
+            {monitor.data.ssl_expires_at && !sslWarning(monitor.data.ssl_expires_at, null) && (
+              <> · SSL valid {sslDaysLeft(monitor.data.ssl_expires_at)}d</>
+            )}
+            {sslWarning(monitor.data.ssl_expires_at, monitor.data.ssl_error) && (
+              <span className="ssl-badge">
+                {sslWarning(monitor.data.ssl_expires_at, monitor.data.ssl_error)}
+              </span>
+            )}
           </p>
         </div>
         <div className="page__actions">

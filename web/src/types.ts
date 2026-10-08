@@ -13,6 +13,8 @@ export interface Monitor {
   degraded_ms: number;
   is_active: boolean;
   created_at: string;
+  ssl_expires_at: string | null;
+  ssl_error: string | null;
 }
 
 export interface MonitorSummary extends Monitor {
@@ -79,3 +81,50 @@ export interface TestCheckResult {
 }
 
 export type TimeRange = "1h" | "24h" | "7d" | "30d";
+
+export interface StatusPageConfig {
+  id: number;
+  slug: string;
+  title: string;
+  description: string | null;
+  monitor_ids: number[];
+}
+
+export type DayState = "up" | "partial" | "down" | "none";
+
+export interface PublicStatus {
+  title: string;
+  description: string | null;
+  overall_status: CheckStatus | null;
+  services: {
+    name: string;
+    status: CheckStatus | null;
+    uptime_pct: number | null;
+    days: { date: string; state: DayState }[];
+  }[];
+  incidents: {
+    title: string;
+    started_at: string;
+    resolved_at: string | null;
+    duration_secs: number | null;
+  }[];
+  updated_at: string;
+}
+
+export interface MonthlyReport {
+  month: string;
+  sla_target: number;
+  monitors: {
+    id: number;
+    name: string;
+    url: string;
+    checks: number;
+    failed_checks: number;
+    uptime_pct: number | null;
+    sla_met: boolean | null;
+    incidents: number;
+    downtime_secs: number;
+    avg_ms: number | null;
+    ssl_expires_at: string | null;
+  }[];
+}

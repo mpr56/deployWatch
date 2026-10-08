@@ -9,7 +9,7 @@ from sqlalchemy import text
 
 from .config import get_settings
 from .db import SessionLocal, engine
-from .routers import alerts, checks, incidents, monitors, status
+from .routers import alerts, checks, incidents, monitors, reports, status, status_pages
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s %(levelname)-7s %(name)s: %(message)s"
@@ -58,6 +58,8 @@ app.include_router(checks.router)
 app.include_router(incidents.router)
 app.include_router(status.router)
 app.include_router(alerts.router)
+app.include_router(status_pages.router)
+app.include_router(reports.router)
 
 
 @app.get("/api/health")

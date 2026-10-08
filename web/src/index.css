@@ -835,3 +835,186 @@ code {
   flex: 1;
   min-width: 0;
 }
+
+/* --- v3 admin bits --------------------------------------------------------- */
+
+.ssl-badge {
+  margin-left: 8px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  background: var(--halo-degraded);
+  font: 500 10.5px/1.4 var(--mono);
+  color: oklch(0.45 0.12 75);
+  vertical-align: 1px;
+}
+.input-inline {
+  padding: 7px 9px;
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  background: var(--panel);
+  color: var(--text);
+  font: 400 12.5px/1 var(--sans);
+}
+.form__legend {
+  margin-bottom: 8px;
+  font: 500 12px/1.3 var(--sans);
+  color: var(--text-dim);
+}
+.checklist {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 6px 16px;
+}
+.form .checklist__item {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  font: 400 13px/1.3 var(--sans);
+  color: var(--text);
+}
+.sp-admin-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  align-items: center;
+  gap: 14px;
+  padding: 13px 18px;
+  border-bottom: 1px solid var(--border-soft);
+}
+.sp-admin-row:last-child {
+  border-bottom: none;
+}
+
+/* --- public status page (sp) ----------------------------------------------- */
+/* Its own visual language: warm white, generous space, one answer up top. */
+
+.sp {
+  min-height: 100vh;
+  background: #fcfcfb;
+}
+.sp__inner {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 64px 24px 72px;
+}
+.sp__brand {
+  font: 500 12px/1 var(--mono);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #9a9a9f;
+}
+.sp__hero {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-top: 34px;
+}
+.sp__dot {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+}
+.sp__headline {
+  margin: 0;
+  font: 600 30px/1.2 var(--sans);
+  letter-spacing: -0.015em;
+  color: var(--text);
+}
+.sp__blurb {
+  margin: 12px 0 0;
+  max-width: 52ch;
+  font: 400 15px/1.5 var(--sans);
+  color: var(--text-dim);
+  text-wrap: pretty;
+}
+.sp--up { background: var(--status-up); }
+.sp--degraded { background: var(--status-degraded); }
+.sp--down { background: var(--status-down); }
+.sp--none { background: var(--status-unknown); }
+
+.sp__services {
+  display: flex;
+  flex-direction: column;
+  gap: 34px;
+  margin-top: 52px;
+}
+.sp__svc-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+.sp__svc-name {
+  font: 500 15px/1.2 var(--sans);
+  color: var(--text);
+}
+.sp__svc-status {
+  font: 400 13px/1 var(--mono);
+}
+.sp-text--up { color: var(--status-up); }
+.sp-text--degraded { color: oklch(0.6 0.14 75); }
+.sp-text--down { color: var(--status-down); }
+.sp-text--none { color: var(--status-unknown); }
+
+.sp__days {
+  display: flex;
+  gap: 2px;
+  height: 30px;
+  margin-top: 12px;
+}
+.sp__day {
+  flex: 1;
+  border-radius: 1.5px;
+}
+.sp-day--up { background: oklch(0.74 0.11 152); }
+.sp-day--partial { background: var(--status-degraded); }
+.sp-day--down { background: var(--status-down); }
+.sp-day--none { background: #e9e9e6; }
+
+.sp__svc-foot {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 8px;
+  font: 400 11px/1 var(--mono);
+  color: #a2a2a8;
+}
+
+.sp__incidents {
+  margin-top: 60px;
+  padding-top: 26px;
+  border-top: 1px solid #e5e5e2;
+}
+.sp__label {
+  font: 500 11px/1 var(--sans);
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: #9a9a9f;
+}
+.sp__none {
+  margin: 18px 0 0;
+  font: 400 14px/1.5 var(--sans);
+  color: var(--text-dim);
+}
+.sp__incident {
+  margin-top: 22px;
+}
+.sp__incident-title {
+  font: 500 14px/1.3 var(--sans);
+  color: var(--text);
+}
+.sp__incident-meta {
+  margin-top: 5px;
+  font: 400 12.5px/1.5 var(--mono);
+  color: var(--text-faint);
+}
+.sp__footer {
+  margin-top: 56px;
+  font: 400 11.5px/1 var(--mono);
+  color: #b0b0b5;
+}
+
+@media (max-width: 600px) {
+  .sp__headline { font-size: 24px; }
+  .sp__days { gap: 1px; }
+  .sp-admin-row { grid-template-columns: 1fr auto; }
+}

@@ -9,6 +9,7 @@ import { Link } from "react-router-dom";
 import { useDeleteMonitor } from "../lib/api";
 import { confirmDelete } from "../lib/confirm";
 import { ms, uptime } from "../lib/format";
+import { sslWarning } from "../lib/ssl";
 import { statusColor } from "../lib/status";
 import type { MonitorSummary } from "../types";
 import { Sparkline } from "./Sparkline";
@@ -27,6 +28,8 @@ export function MonitorRow({ monitor }: { monitor: MonitorSummary }) {
     }
   };
 
+  const ssl = sslWarning(monitor.ssl_expires_at, monitor.ssl_error);
+
   const resp =
     status === "down" && monitor.last_response_time_ms == null
       ? "failed"
@@ -40,7 +43,10 @@ export function MonitorRow({ monitor }: { monitor: MonitorSummary }) {
       <div className="row__identity">
         <StatusDot status={status} size={8} halo />
         <div className="row__text">
-          <div className="row__name">{monitor.name}</div>
+          <div className="row__name">
+            {monitor.name}
+            {ssl && <span className="ssl-badge">{ssl}</span>}
+          </div>
           <div className="row__url">{monitor.url.replace(/^https?:\/\//, "")}</div>
         </div>
       </div>

@@ -55,6 +55,8 @@ class MonitorOut(BaseModel):
     degraded_ms: int
     is_active: bool
     created_at: datetime
+    ssl_expires_at: datetime | None = None
+    ssl_error: str | None = None
 
 
 class CheckOut(BaseModel):
@@ -131,3 +133,18 @@ class TestCheckResult(BaseModel):
     status_code: int | None = None
     response_time_ms: int | None = None
     error_message: str | None = None
+
+
+class StatusPageIn(BaseModel):
+    slug: str = Field(pattern=r"^[a-z0-9][a-z0-9-]{1,39}$")
+    title: str = Field(min_length=1, max_length=120)
+    description: str | None = Field(default=None, max_length=500)
+    monitor_ids: list[int] = Field(default_factory=list)
+
+
+class StatusPageOut(BaseModel):
+    id: int
+    slug: str
+    title: str
+    description: str | None
+    monitor_ids: list[int]

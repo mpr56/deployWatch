@@ -11,6 +11,8 @@ import {
 import { useIncidents, useMonitors } from "./lib/api";
 import { Dashboard } from "./routes/Dashboard";
 import { Incidents } from "./routes/Incidents";
+import { Reports } from "./routes/Reports";
+import { StatusPages } from "./routes/StatusPages";
 import { IncidentDetail } from "./routes/IncidentDetail";
 import { MonitorDetail } from "./routes/MonitorDetail";
 import { MonitorForm } from "./routes/MonitorForm";
@@ -69,6 +71,22 @@ function AppShell() {
           )}
         </NavLink>
         <NavLink
+          to="/status-pages"
+          className={({ isActive }) =>
+            isActive ? "sidebar__link sidebar__link--active" : "sidebar__link"
+          }
+        >
+          <span>Status pages</span>
+        </NavLink>
+        <NavLink
+          to="/reports"
+          className={({ isActive }) =>
+            isActive ? "sidebar__link sidebar__link--active" : "sidebar__link"
+          }
+        >
+          <span>Reports</span>
+        </NavLink>
+        <NavLink
           to="/monitors/new"
           className={({ isActive }) =>
             isActive ? "sidebar__link sidebar__link--active" : "sidebar__link"
@@ -107,6 +125,8 @@ export function App() {
         <Route path="/monitors/:id" element={<MonitorDetail />} />
         <Route path="/monitors/:id/edit" element={<MonitorForm />} />
         <Route path="/incidents" element={<Incidents />} />
+        <Route path="/status-pages" element={<StatusPages />} />
+        <Route path="/reports" element={<Reports />} />
         <Route path="/incidents/:id" element={<IncidentDetail />} />
       </Route>
     </Routes>
