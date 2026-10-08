@@ -76,7 +76,9 @@ def _jwks_client() -> jwt.PyJWKClient:
 
 async def _decode(token: str) -> dict:
     s = get_settings()
-    if s.supabase_jwt_secret:  # legacy HS256 projects
+    if jwt.get_unverified_header(token).get("alg") == "HS256":
+        if not s.supabase_jwt_secret:
+            raise jwt.InvalidTokenError("HS256 token but SUPABASE_JWT_SECRET is not set")
         return jwt.decode(token, s.supabase_jwt_secret, algorithms=["HS256"], audience="authenticated")
     key = await asyncio.to_thread(lambda: _jwks_client().get_signing_key_from_jwt(token))
     return jwt.decode(token, key.key, algorithms=["ES256", "RS256"], audience="authenticated")
