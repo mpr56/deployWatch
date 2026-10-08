@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..auth import Principal, principal, visible_monitor
 from ..db import get_session
 from ..schemas import CheckOut, CheckStats
 
@@ -41,12 +42,14 @@ async def list_checks(
     range: Range = "24h",
     limit: int = Query(default=200, le=2000),
     session: AsyncSession = Depends(get_session),
+    p: Principal = Depends(principal),
 ) -> list[CheckOut]:
     """Raw checks, newest first. Feeds the dense table on the monitor detail screen.
 
     Always bounded by both a time window and a limit -- an unbounded query
     against this table is how you take the page down.
     """
+    await visible_monitor(session, monitor_id, p)
     rows = await session.execute(
         text(f"""
             SELECT id, monitor_id, status, response_time_ms, status_code,
@@ -67,6 +70,7 @@ async def check_series(
     monitor_id: int,
     range: Range = "24h",
     session: AsyncSession = Depends(get_session),
+    p: Principal = Depends(principal),
 ):
     """Bucketed response times for the big chart.
 
@@ -74,6 +78,7 @@ async def check_series(
     where every check failed (no timings), come back with null avg/p95 so the
     chart shows a gap -- the picture of an outage -- instead of interpolating.
     """
+    await visible_monitor(session, monitor_id, p)
     _interval(range)  # validates range
     interval, width = RANGES[range]
     rows = await session.execute(
@@ -128,12 +133,14 @@ async def check_stats(
     monitor_id: int,
     range: Range = "24h",
     session: AsyncSession = Depends(get_session),
+    p: Principal = Depends(principal),
 ) -> CheckStats:
     """P50/P95/P99 + uptime for the stat row above the chart.
 
     Percentiles ignore failed requests (NULL timing). Uptime counts degraded as
     available, matching the dashboard's 24h figure.
     """
+    await visible_monitor(session, monitor_id, p)
     row = (
         await session.execute(
             text(f"""

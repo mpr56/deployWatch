@@ -15,6 +15,7 @@ export interface Monitor {
   created_at: string;
   ssl_expires_at: string | null;
   ssl_error: string | null;
+  is_sandbox: boolean;
 }
 
 export interface MonitorSummary extends Monitor {
@@ -88,6 +89,7 @@ export interface StatusPageConfig {
   title: string;
   description: string | null;
   monitor_ids: number[];
+  is_sandbox: boolean;
 }
 
 export type DayState = "up" | "partial" | "down" | "none";

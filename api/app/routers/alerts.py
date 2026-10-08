@@ -5,10 +5,17 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..alerts.dispatch import send
+from ..auth import (
+    SANDBOX_LIMITS,
+    Principal,
+    assert_public_url,
+    editable_monitor,
+    editor,
+)
 from ..db import get_session
 from ..models import AlertChannel, AlertConfig, Incident, Monitor
 from ..schemas import AlertConfigCreate, AlertConfigOut
@@ -18,8 +25,12 @@ router = APIRouter(prefix="/api", tags=["alerts"])
 
 @router.get("/monitors/{monitor_id}/alerts", response_model=list[AlertConfigOut])
 async def list_alerts(
-    monitor_id: int, session: AsyncSession = Depends(get_session)
+    monitor_id: int,
+    session: AsyncSession = Depends(get_session),
+    p: Principal = Depends(editor),
 ) -> list[AlertConfig]:
+    """Alert destinations are private (email addresses), so editors only."""
+    await editable_monitor(session, monitor_id, p)
     return list(
         await session.scalars(
             select(AlertConfig)
@@ -38,14 +49,27 @@ async def create_alert(
     monitor_id: int,
     payload: AlertConfigCreate,
     session: AsyncSession = Depends(get_session),
+    p: Principal = Depends(editor),
 ) -> AlertConfig:
-    if await session.get(Monitor, monitor_id) is None:
-        raise HTTPException(404, "monitor not found")
+    await editable_monitor(session, monitor_id, p)
     dest = payload.destination.strip()
+    if p.role == "sandbox":
+        if payload.channel == AlertChannel.email:
+            raise HTTPException(422, "sandbox alerts are webhook-only")
+        used = await session.scalar(
+            select(func.count())
+            .select_from(AlertConfig)
+            .join(Monitor, Monitor.id == AlertConfig.monitor_id)
+            .where(Monitor.user_id == p.user_id)
+        )
+        if used >= SANDBOX_LIMITS["webhooks"]:
+            raise HTTPException(429, f"sandbox limit: {SANDBOX_LIMITS['webhooks']} webhooks")
     if payload.channel == AlertChannel.email and "@" not in dest:
         raise HTTPException(422, "destination must be an email address")
     if payload.channel == AlertChannel.webhook and not dest.startswith(("http://", "https://")):
         raise HTTPException(422, "destination must be an http(s) URL")
+    if payload.channel == AlertChannel.webhook:
+        await assert_public_url(dest)
     config = AlertConfig(
         monitor_id=monitor_id,
         channel=payload.channel,
@@ -59,18 +83,30 @@ async def create_alert(
 
 
 @router.delete("/alerts/{alert_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_alert(alert_id: int, session: AsyncSession = Depends(get_session)) -> None:
+async def delete_alert(
+    alert_id: int,
+    session: AsyncSession = Depends(get_session),
+    p: Principal = Depends(editor),
+) -> None:
+    config = await session.get(AlertConfig, alert_id)
+    if config is None:
+        return
+    await editable_monitor(session, config.monitor_id, p)
     await session.execute(delete(AlertConfig).where(AlertConfig.id == alert_id))
     await session.commit()
 
 
 @router.post("/alerts/{alert_id}/test")
-async def test_alert(alert_id: int, session: AsyncSession = Depends(get_session)) -> dict:
+async def test_alert(
+    alert_id: int,
+    session: AsyncSession = Depends(get_session),
+    p: Principal = Depends(editor),
+) -> dict:
     """Send a sample notification through one config. Not recorded in sent_alerts."""
     config = await session.get(AlertConfig, alert_id)
     if config is None:
         raise HTTPException(404, "alert not found")
-    monitor = await session.get(Monitor, config.monitor_id)
+    monitor = await editable_monitor(session, config.monitor_id, p)
     sample = Incident(
         id=0,
         monitor_id=monitor.id,

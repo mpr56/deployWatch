@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..auth import Principal, principal, visible_user_ids
 from ..db import get_session
 
 router = APIRouter(prefix="/api/reports", tags=["reports"])
@@ -19,6 +20,7 @@ async def monthly_report(
     month: str = Query(pattern=r"^\d{4}-\d{2}$", description="YYYY-MM"),
     sla: float = Query(default=99.9, gt=0, le=100),
     session: AsyncSession = Depends(get_session),
+    p: Principal = Depends(principal),
 ):
     year, mon = map(int, month.split("-"))
     if not 1 <= mon <= 12:
@@ -63,9 +65,10 @@ async def monthly_report(
             FROM monitors m
             LEFT JOIN agg a ON a.monitor_id = m.id
             LEFT JOIN inc i ON i.monitor_id = m.id
+            WHERE m.user_id = ANY(:users)
             ORDER BY m.name
         """),
-        {"start": start, "end": end, "today": today},
+        {"start": start, "end": end, "today": today, "users": visible_user_ids(p)},
     )
 
     monitors = []

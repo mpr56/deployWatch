@@ -8,7 +8,10 @@ import {
   useNavigate,
 } from "react-router-dom";
 
+import { AuthGate } from "./components/AuthGate";
+import { SessionBar } from "./components/SessionBar";
 import { useIncidents, useMonitors } from "./lib/api";
+import { useAuth } from "./lib/auth";
 import { Dashboard } from "./routes/Dashboard";
 import { Incidents } from "./routes/Incidents";
 import { Reports } from "./routes/Reports";
@@ -33,6 +36,7 @@ function AppShell() {
   const count = monitors.data?.length;
   const down = monitors.data?.filter((m) => m.current_status === "down").length;
   const onDashboard = location.pathname === "/";
+  const { canEdit, openGate, role } = useAuth();
 
   return (
     <div className="app">
@@ -86,27 +90,35 @@ function AppShell() {
         >
           <span>Reports</span>
         </NavLink>
-        <NavLink
-          to="/monitors/new"
-          className={({ isActive }) =>
-            isActive ? "sidebar__link sidebar__link--active" : "sidebar__link"
-          }
-        >
-          <span>Add monitor</span>
-        </NavLink>
+        {canEdit ? (
+          <NavLink
+            to="/monitors/new"
+            className={({ isActive }) =>
+              isActive ? "sidebar__link sidebar__link--active" : "sidebar__link"
+            }
+          >
+            <span>Add monitor</span>
+          </NavLink>
+        ) : (
+          <button className="sidebar__link sidebar__link--button" onClick={openGate}>
+            <span>Add monitor</span>
+          </button>
+        )}
         <div className="sidebar__foot">
           refreshing every 30s
         </div>
       </nav>
       <main className="main">
-        {!onDashboard && (
-          <div className="topbar">
+        <div className={role === "sandbox" ? "topbar topbar--sandbox" : "topbar"}>
+          {!onDashboard && (
             <button className="btn nav__back" onClick={goBack}>
               ← Back
             </button>
-          </div>
-        )}
+          )}
+          <SessionBar />
+        </div>
         <Outlet />
+        <AuthGate />
       </main>
     </div>
   );

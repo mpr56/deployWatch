@@ -10,9 +10,20 @@ from __future__ import annotations
 from dataclasses import asdict
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import delete, select, text
+from sqlalchemy import delete, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..auth import (
+    SANDBOX_LIMITS,
+    Principal,
+    assert_public_url,
+    editable_monitor,
+    editor,
+    owner_id,
+    principal,
+    visible_monitor,
+    visible_user_ids,
+)
 from ..db import get_session
 from ..models import CheckStatus, Monitor
 from ..schemas import (
@@ -38,6 +49,7 @@ async def _get_or_404(session: AsyncSession, monitor_id: int) -> Monitor:
 @router.get("", response_model=list[MonitorSummary])
 async def list_monitors(
     session: AsyncSession = Depends(get_session),
+    p: Principal = Depends(principal),
 ) -> list[MonitorSummary]:
     """Everything the dashboard needs, in three queries regardless of monitor count.
 
@@ -45,7 +57,13 @@ async def list_monitors(
     and the planner handles each well. All of them are bounded by
     checks_monitor_time_idx and the current month's partition.
     """
-    monitors = (await session.scalars(select(Monitor).order_by(Monitor.id))).all()
+    monitors = (
+        await session.scalars(
+            select(Monitor)
+            .where(Monitor.user_id.in_(visible_user_ids(p)))
+            .order_by(Monitor.id)
+        )
+    ).all()
     if not monitors:
         return []
 
@@ -116,9 +134,23 @@ async def list_monitors(
 
 @router.post("", response_model=MonitorOut, status_code=status.HTTP_201_CREATED)
 async def create_monitor(
-    payload: MonitorCreate, session: AsyncSession = Depends(get_session)
+    payload: MonitorCreate,
+    session: AsyncSession = Depends(get_session),
+    p: Principal = Depends(editor),
 ) -> Monitor:
-    monitor = Monitor(**payload.model_dump(mode="json"))
+    await assert_public_url(str(payload.url))
+    if p.role == "sandbox":
+        count = await session.scalar(
+            select(func.count()).where(Monitor.user_id == p.user_id)
+        )
+        if count >= SANDBOX_LIMITS["monitors"]:
+            raise HTTPException(429, f"sandbox limit: {SANDBOX_LIMITS['monitors']} monitors")
+        if payload.interval_secs < 60:
+            raise HTTPException(422, "sandbox monitors check at most once a minute")
+    monitor = Monitor(
+        **payload.model_dump(mode="json"),
+        user_id=owner_id() if p.role == "owner" else p.user_id,
+    )
     session.add(monitor)
     await session.commit()
     await session.refresh(monitor)
@@ -127,9 +159,11 @@ async def create_monitor(
 
 @router.get("/{monitor_id}", response_model=MonitorOut)
 async def get_monitor(
-    monitor_id: int, session: AsyncSession = Depends(get_session)
+    monitor_id: int,
+    session: AsyncSession = Depends(get_session),
+    p: Principal = Depends(principal),
 ) -> Monitor:
-    return await _get_or_404(session, monitor_id)
+    return await visible_monitor(session, monitor_id, p)
 
 
 @router.patch("/{monitor_id}", response_model=MonitorOut)
@@ -137,9 +171,15 @@ async def update_monitor(
     monitor_id: int,
     payload: MonitorUpdate,
     session: AsyncSession = Depends(get_session),
+    p: Principal = Depends(editor),
 ) -> Monitor:
-    monitor = await _get_or_404(session, monitor_id)
-    for field, value in payload.model_dump(exclude_unset=True, mode="json").items():
+    monitor = await editable_monitor(session, monitor_id, p)
+    changes = payload.model_dump(exclude_unset=True, mode="json")
+    if "url" in changes:
+        await assert_public_url(changes["url"])
+    if p.role == "sandbox" and changes.get("interval_secs", 60) < 60:
+        raise HTTPException(422, "sandbox monitors check at most once a minute")
+    for field, value in changes.items():
         setattr(monitor, field, value)
     await session.commit()
     await session.refresh(monitor)
@@ -148,22 +188,22 @@ async def update_monitor(
 
 @router.delete("/{monitor_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_monitor(
-    monitor_id: int, session: AsyncSession = Depends(get_session)
+    monitor_id: int,
+    session: AsyncSession = Depends(get_session),
+    p: Principal = Depends(editor),
 ) -> None:
-    await _get_or_404(session, monitor_id)
+    await editable_monitor(session, monitor_id, p)
     # ON DELETE CASCADE takes the checks and incidents with it.
     await session.execute(delete(Monitor).where(Monitor.id == monitor_id))
     await session.commit()
 
 
 @router.post("/test", response_model=TestCheckResult)
-async def test_monitor(payload: MonitorCreate) -> TestCheckResult:
-    """The "Test now" button. Runs one check, writes nothing, returns the result.
-
-    Needs checker.engine.run_check -- see api/app/checker/engine.py.
-    """
+async def test_monitor(payload: MonitorCreate, p: Principal = Depends(editor)) -> TestCheckResult:
+    """The "Test now" button. Runs one check, writes nothing, returns the result."""
     from ..checker.engine import run_check
 
+    await assert_public_url(str(payload.url))
     result = await run_check(
         url=str(payload.url),
         timeout_ms=payload.timeout_ms,

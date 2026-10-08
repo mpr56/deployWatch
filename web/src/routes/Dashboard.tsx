@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
+import { EditLink } from "../components/EditLink";
 import { MonitorRow } from "../components/MonitorRow";
 import { useIncidents, useMonitors } from "../lib/api";
 import { duration, ms, relativeTime, uptime } from "../lib/format";
@@ -36,9 +37,9 @@ export function Dashboard() {
       <div className="page empty">
         <h1>No monitors yet</h1>
         <p>Add a URL and DeployWatch will start checking it on a schedule.</p>
-        <Link to="/monitors/new" className="btn btn--primary">
+        <EditLink to="/monitors/new" className="btn btn--primary">
           Add your first monitor
-        </Link>
+        </EditLink>
       </div>
     );
   }
@@ -67,9 +68,9 @@ export function Dashboard() {
             >
               Sort: {sort === "severity" ? "Status" : "Name"}
             </button>
-            <Link to="/monitors/new" className="btn btn--primary">
+            <EditLink to="/monitors/new" className="btn btn--primary">
               + Add monitor
-            </Link>
+            </EditLink>
           </div>
         </div>
         <div className="tabs">

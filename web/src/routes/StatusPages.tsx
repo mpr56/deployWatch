@@ -3,11 +3,12 @@
 import { useState } from "react";
 
 import { useDeleteStatusPage, useMonitors, useSaveStatusPage, useStatusPages } from "../lib/api";
+import { useAuth } from "../lib/auth";
 import { confirmDelete } from "../lib/confirm";
 import type { StatusPageConfig } from "../types";
 
 type Draft = Omit<StatusPageConfig, "id"> & { id?: number };
-const EMPTY: Draft = { slug: "", title: "", description: "", monitor_ids: [] };
+const EMPTY: Draft = { slug: "", title: "", description: "", monitor_ids: [], is_sandbox: false };
 
 export function StatusPages() {
   const pages = useStatusPages();
@@ -15,6 +16,7 @@ export function StatusPages() {
   const save = useSaveStatusPage();
   const remove = useDeleteStatusPage();
   const [draft, setDraft] = useState<Draft | null>(null);
+  const { guard, role } = useAuth();
 
   const names = new Map(monitors.data?.map((m) => [m.id, m.name]));
 
@@ -47,7 +49,7 @@ export function StatusPages() {
           </p>
         </div>
         {!draft && (
-          <button className="btn btn--primary" onClick={() => setDraft(EMPTY)}>
+          <button className="btn btn--primary" onClick={() => guard(() => setDraft(EMPTY))}>
             + New status page
           </button>
         )}
@@ -133,15 +135,21 @@ export function StatusPages() {
               <a href={`/status/${p.slug}`} target="_blank" rel="noreferrer" className="mono">
                 /status/{p.slug} ↗
               </a>
-              <button className="btn btn--sm" onClick={() => setDraft({ ...p })}>
-                Edit
-              </button>
-              <button
-                className="btn btn--sm btn--danger"
-                onClick={() => confirmDelete(p.title) && remove.mutate(p.id)}
-              >
-                Delete
-              </button>
+              {role === "sandbox" && !p.is_sandbox ? (
+                <span className="muted">read-only</span>
+              ) : (
+                <span className="page__actions">
+                  <button className="btn btn--sm" onClick={() => guard(() => setDraft({ ...p }))}>
+                    Edit
+                  </button>
+                  <button
+                    className="btn btn--sm btn--danger"
+                    onClick={() => guard(() => confirmDelete(p.title) && remove.mutate(p.id))}
+                  >
+                    Delete
+                  </button>
+                </span>
+              )}
             </div>
           ))}
         </div>

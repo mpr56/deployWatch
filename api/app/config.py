@@ -14,6 +14,13 @@ class Settings(BaseSettings):
     incident_open_after: int = 3
     incident_close_after: int = 2
 
+    # Auth (Supabase). Leave SUPABASE_URL empty to run with auth off locally.
+    supabase_url: str = ""
+    supabase_jwt_secret: str = ""  # only for legacy HS256 projects
+    owner_user_id: str = ""
+    # Allow monitors/webhooks to target localhost and private networks.
+    allow_private_targets: bool = False
+
     cors_origins: str = "http://localhost:5173"
 
     smtp_host: str = "localhost"

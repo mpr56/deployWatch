@@ -19,6 +19,8 @@ import {
 import { Link, useNavigate, useParams } from "react-router-dom";
 
 import { AlertsPanel } from "../components/AlertsPanel";
+import { EditLink } from "../components/EditLink";
+import { useAuth } from "../lib/auth";
 import { StatusDot } from "../components/StatusDot";
 import { confirmDelete } from "../lib/confirm";
 import {
@@ -59,6 +61,7 @@ export function MonitorDetail() {
   const series = useCheckSeries(id, range);
   const del = useDeleteMonitor();
   const navigate = useNavigate();
+  const { canEdit, guard, role } = useAuth();
 
   if (monitor.isLoading) return <div className="page">Loading…</div>;
   if (!monitor.data) return <div className="page error">Not found</div>;
@@ -84,22 +87,26 @@ export function MonitorDetail() {
             )}
           </p>
         </div>
+        {(!canEdit || role === "owner" || monitor.data.is_sandbox) && (
         <div className="page__actions">
-          <Link to={`/monitors/${id}/edit`} className="btn">
+          <EditLink to={`/monitors/${id}/edit`} className="btn">
             Edit
-          </Link>
+          </EditLink>
           <button
             className="btn btn--danger"
             disabled={del.isPending}
-            onClick={() => {
-              if (confirmDelete(monitor.data!.name)) {
-                del.mutate(id, { onSuccess: () => navigate("/") });
-              }
-            }}
+            onClick={() =>
+              guard(() => {
+                if (confirmDelete(monitor.data!.name)) {
+                  del.mutate(id, { onSuccess: () => navigate("/") });
+                }
+              })
+            }
           >
             Delete
           </button>
         </div>
+        )}
       </header>
 
       <div className="range-tabs">
@@ -202,7 +209,7 @@ export function MonitorDetail() {
         </table>
       </section>
 
-      <AlertsPanel monitorId={id} />
+      {canEdit && (role === "owner" || monitor.data.is_sandbox) && <AlertsPanel monitorId={id} />}
 
       <section className="panel">
         <h2>Incidents</h2>
