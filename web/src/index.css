@@ -363,3 +363,34 @@ code {
   margin: 0 auto;
   padding: 80px 24px;
 }
+
+/* --- stat row ------------------------------------------------------------ */
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.stat {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px;
+}
+.stat__value {
+  font-size: 26px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+.stat__label {
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+@media (max-width: 860px) {
+  .stats {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}

@@ -53,6 +53,14 @@ export interface CheckStats {
   uptime_pct: number | null;
 }
 
+export interface SeriesPoint {
+  bucket: string;
+  avg_ms: number | null;
+  p95_ms: number | null;
+  total: number;
+  failed: number;
+}
+
 export interface TestCheckResult {
   status: CheckStatus;
   status_code: number | null;

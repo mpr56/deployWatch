@@ -12,6 +12,8 @@ import {
 
 import type {
   Check,
+  CheckStats,
+  SeriesPoint,
   Incident,
   Monitor,
   MonitorSummary,
@@ -65,6 +67,26 @@ export function useChecks(monitorId: number, range: TimeRange = "24h") {
     queryKey: ["checks", monitorId, range],
     queryFn: () =>
       request<Check[]>(`/checks?monitor_id=${monitorId}&range=${range}`),
+    refetchInterval: 30_000,
+  });
+}
+
+export function useCheckStats(monitorId: number, range: TimeRange = "24h") {
+  return useQuery({
+    queryKey: ["check-stats", monitorId, range],
+    queryFn: () =>
+      request<CheckStats>(`/checks/stats?monitor_id=${monitorId}&range=${range}`),
+    refetchInterval: 30_000,
+  });
+}
+
+export function useCheckSeries(monitorId: number, range: TimeRange = "24h") {
+  return useQuery({
+    queryKey: ["check-series", monitorId, range],
+    queryFn: () =>
+      request<SeriesPoint[]>(
+        `/checks/series?monitor_id=${monitorId}&range=${range}`,
+      ),
     refetchInterval: 30_000,
   });
 }

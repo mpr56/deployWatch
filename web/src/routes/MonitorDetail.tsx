@@ -6,13 +6,43 @@
 // api/app/routers/checks.py.
 
 import { useState } from "react";
+import {
+  CartesianGrid,
+  Legend,
+  Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
 import { StatusDot } from "../components/StatusDot";
 import { confirmDelete } from "../lib/confirm";
-import { useChecks, useDeleteMonitor, useIncidents, useMonitor } from "../lib/api";
-import { duration, ms, relativeTime } from "../lib/format";
+import {
+  useCheckSeries,
+  useCheckStats,
+  useChecks,
+  useDeleteMonitor, useIncidents, useMonitor } from "../lib/api";
+import { duration, ms, relativeTime, uptime } from "../lib/format";
 import type { TimeRange } from "../types";
+
+function Stat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="stat">
+      <div className="stat__value">{value}</div>
+      <div className="stat__label">{label}</div>
+    </div>
+  );
+}
+
+function formatTick(iso: string, range: TimeRange): string {
+  const d = new Date(iso);
+  return range === "7d" || range === "30d"
+    ? d.toLocaleDateString([], { month: "short", day: "numeric" })
+    : d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
 
 const RANGES: TimeRange[] = ["1h", "24h", "7d", "30d"];
 
@@ -23,6 +53,8 @@ export function MonitorDetail() {
   const monitor = useMonitor(id);
   const checks = useChecks(id, range);
   const incidents = useIncidents(id);
+  const stats = useCheckStats(id, range);
+  const series = useCheckSeries(id, range);
   const del = useDeleteMonitor();
   const navigate = useNavigate();
 
@@ -72,20 +104,64 @@ export function MonitorDetail() {
         ))}
       </div>
 
-      {/* TODO (you): percentile row. GET /api/checks/stats?monitor_id&range
-          P50 / P95 / P99 / uptime, four big numbers above the chart. */}
-      <section className="panel panel--todo">
-        <strong>Percentiles</strong> — build{" "}
-        <code>check_stats</code> in <code>api/app/routers/checks.py</code>
+      <section className="stats">
+        <Stat label="P50" value={ms(stats.data?.p50_ms)} />
+        <Stat label="P95" value={ms(stats.data?.p95_ms)} />
+        <Stat label="P99" value={ms(stats.data?.p99_ms)} />
+        <Stat label="Uptime" value={uptime(stats.data?.uptime_pct)} />
       </section>
 
-      {/* TODO (you): the big chart. GET /api/checks/series?monitor_id&range
-          Recharts LineChart, avg and p95 as two lines. Import from recharts --
-          it is already a dependency. Show gaps where buckets are empty; a gap
-          is the picture of an outage and interpolating hides it. */}
-      <section className="panel panel--todo" style={{ minHeight: 220 }}>
-        <strong>Response time chart</strong> — build{" "}
-        <code>check_series</code> in <code>api/app/routers/checks.py</code>
+      <section className="panel">
+        <h2>Response time</h2>
+        <div style={{ height: 260 }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={series.data ?? []}>
+              <CartesianGrid stroke="var(--border)" vertical={false} />
+              <XAxis
+                dataKey="bucket"
+                tickFormatter={(v) => formatTick(v, range)}
+                stroke="var(--text-dim)"
+                fontSize={11}
+                minTickGap={40}
+              />
+              <YAxis
+                stroke="var(--text-dim)"
+                fontSize={11}
+                width={56}
+                tickFormatter={(v) => ms(v)}
+              />
+              <Tooltip
+                contentStyle={{
+                  background: "var(--panel)",
+                  border: "1px solid var(--border)",
+                }}
+                labelFormatter={(v) => new Date(v).toLocaleString()}
+                formatter={(v: number) => ms(v)}
+              />
+              <Legend />
+              {/* connectNulls=false: empty or all-failed buckets leave a gap.
+                  The gap is the outage; interpolating would hide it. */}
+              <Line
+                type="monotone"
+                dataKey="avg_ms"
+                name="avg"
+                stroke="var(--status-up)"
+                dot={false}
+                connectNulls={false}
+                isAnimationActive={false}
+              />
+              <Line
+                type="monotone"
+                dataKey="p95_ms"
+                name="p95"
+                stroke="var(--status-degraded)"
+                dot={false}
+                connectNulls={false}
+                isAnimationActive={false}
+              />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
       </section>
 
       <section className="panel">
