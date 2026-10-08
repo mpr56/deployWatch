@@ -4,6 +4,7 @@
 import { useState } from "react";
 
 import { useAlerts, useCreateAlert, useDeleteAlert, useTestAlert } from "../lib/api";
+import { useAuth } from "../lib/auth";
 import type { AlertChannel } from "../types";
 
 export function AlertsPanel({ monitorId }: { monitorId: number }) {
@@ -12,7 +13,9 @@ export function AlertsPanel({ monitorId }: { monitorId: number }) {
   const remove = useDeleteAlert(monitorId);
   const test = useTestAlert();
 
-  const [channel, setChannel] = useState<AlertChannel>("email");
+  const { role } = useAuth();
+  const sandbox = role === "sandbox";
+  const [channel, setChannel] = useState<AlertChannel>(sandbox ? "webhook" : "email");
   const [destination, setDestination] = useState("");
   const [testResult, setTestResult] = useState<Record<number, string>>({});
 
@@ -37,6 +40,7 @@ export function AlertsPanel({ monitorId }: { monitorId: number }) {
       <h2>Alerts</h2>
       <p className="muted alerts__hint">
         Notified when an incident opens and when it resolves.
+        {sandbox && " Sandbox alerts are webhook-only — try a free URL from webhook.site."}
       </p>
 
       {alerts.data?.length === 0 && (
@@ -76,7 +80,7 @@ export function AlertsPanel({ monitorId }: { monitorId: number }) {
           value={channel}
           onChange={(e) => setChannel(e.target.value as AlertChannel)}
         >
-          <option value="email">Email</option>
+          {!sandbox && <option value="email">Email</option>}
           <option value="webhook">Webhook</option>
         </select>
         <input

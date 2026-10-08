@@ -61,7 +61,7 @@ def start() -> AsyncIOScheduler:
     # twice a day (and once shortly after boot).
     from datetime import datetime, timedelta, timezone
 
-    from ..jobs import rollup, ssl_check
+    from ..jobs import rollup, sandbox, ssl_check
 
     soon = datetime.now(timezone.utc) + timedelta(seconds=20)
     scheduler.add_job(rollup.rollup, "cron", hour=0, minute=10, args=[2],
@@ -69,6 +69,9 @@ def start() -> AsyncIOScheduler:
     scheduler.add_job(rollup.rollup, "date", run_date=soon, args=[90], id="rollup-backfill")
     scheduler.add_job(ssl_check.check_all, "interval", hours=12, next_run_time=soon,
                       id="ssl-check", max_instances=1, coalesce=True)
+
+    scheduler.add_job(sandbox.sweep, "interval", minutes=1, id="sandbox-sweep",
+                      max_instances=1, coalesce=True)
 
     scheduler.start()
     _scheduler = scheduler

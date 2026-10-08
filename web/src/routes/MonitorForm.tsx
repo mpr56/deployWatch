@@ -15,7 +15,17 @@ import {
   useTestMonitor,
   useUpdateMonitor,
 } from "../lib/api";
+import { useAuth } from "../lib/auth";
 import { ms } from "../lib/format";
+
+// Must match INTERVAL_BUCKETS in api/app/schemas.py -- the scheduler only runs these.
+const INTERVALS = [
+  { secs: 30, label: "Every 30 seconds" },
+  { secs: 60, label: "Every minute" },
+  { secs: 300, label: "Every 5 minutes" },
+  { secs: 900, label: "Every 15 minutes" },
+  { secs: 3600, label: "Every hour" },
+];
 
 const BLANK = {
   name: "",
@@ -46,20 +56,43 @@ export function MonitorForm() {
   const update = useUpdateMonitor(id ?? 0);
   const test = useTestMonitor();
 
-  const set = (k: keyof typeof BLANK) => (e: React.ChangeEvent<HTMLInputElement>) =>
+  const { canEdit, openGate, role } = useAuth();
+
+  const set = (k: keyof typeof BLANK) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
     setForm({
       ...form,
-      [k]: e.target.type === "number" ? Number(e.target.value) : e.target.value,
+      [k]:
+        e.target.type === "number" || k === "interval_secs"
+          ? Number(e.target.value)
+          : e.target.value,
     });
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (id) await update.mutateAsync(form);
-    else await create.mutateAsync(form);
-    navigate("/");
+    try {
+      if (id) await update.mutateAsync(form);
+      else await create.mutateAsync(form);
+      navigate("/");
+    } catch {
+      // shown below via saveError
+    }
   }
 
   const saveError = create.error ?? update.error;
+
+  if (!canEdit) {
+    return (
+      <div className="page page--narrow">
+        <h1>{id ? "Edit monitor" : "Add monitor"}</h1>
+        <section className="panel">
+          <p>Sign in as admin, or start a 5-minute sandbox, to add or change monitors.</p>
+          <button className="btn btn--primary" onClick={openGate}>
+            Sign in / Try sandbox
+          </button>
+        </section>
+      </div>
+    );
+  }
 
   return (
     <div className="page page--narrow">
@@ -84,13 +117,14 @@ export function MonitorForm() {
 
         <div className="form__grid">
           <label>
-            Interval (seconds)
-            <input
-              type="number"
-              value={form.interval_secs}
-              onChange={set("interval_secs")}
-              min={10}
-            />
+            Check interval
+            <select value={form.interval_secs} onChange={set("interval_secs")}>
+              {INTERVALS.filter((i) => role !== "sandbox" || i.secs >= 60).map((i) => (
+                <option key={i.secs} value={i.secs}>
+                  {i.label}
+                </option>
+              ))}
+            </select>
           </label>
           <label>
             Expected status
@@ -138,14 +172,8 @@ export function MonitorForm() {
             )}
           </div>
         )}
-        {test.error && (
-          <div className="test-result error">
-            {/* Until checker/engine.py:run_check exists this returns a 500 --
-                expected, and it is the first thing worth building. */}
-            {String(test.error)}
-          </div>
-        )}
-        {saveError && <div className="error">{String(saveError)}</div>}
+        {test.error && <div className="test-result error">{test.error.message}</div>}
+        {saveError && <div className="error">{saveError.message}</div>}
       </form>
     </div>
   );

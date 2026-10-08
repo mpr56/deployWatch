@@ -25,6 +25,7 @@ import type {
   TestCheckResult,
   TimeRange,
 } from "../types";
+import { accessToken } from "./supabase";
 
 export class ApiError extends Error {
   constructor(
@@ -35,16 +36,24 @@ export class ApiError extends Error {
   }
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+export async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const token = await accessToken();
   const res = await fetch(`/api${path}`, {
-    headers: { "Content-Type": "application/json" },
     ...init,
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
   });
 
   if (!res.ok) {
     // FastAPI puts the useful message in `detail`.
     const body = await res.json().catch(() => null);
-    throw new ApiError(body?.detail ?? res.statusText, res.status);
+    const detail = body?.detail;
+    const message = Array.isArray(detail)
+      ? detail.map((d: { loc?: unknown[]; msg: string }) => `${d.loc?.at(-1) ?? ""}: ${d.msg}`).join("; ")
+      : (detail ?? res.statusText);
+    throw new ApiError(message, res.status);
   }
   return res.status === 204 ? (undefined as T) : ((await res.json()) as T);
 }
@@ -227,7 +236,7 @@ export function useStatusPages() {
   });
 }
 
-type StatusPageBody = Omit<StatusPageConfig, "id">;
+type StatusPageBody = Omit<StatusPageConfig, "id" | "is_sandbox"> & { is_sandbox?: boolean };
 
 export function useSaveStatusPage() {
   const qc = useQueryClient();

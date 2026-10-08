@@ -14,6 +14,15 @@ from pydantic import BaseModel, ConfigDict, Field, HttpUrl, field_validator
 from .models import AlertChannel, CheckStatus
 
 
+INTERVAL_BUCKETS = (30, 60, 300, 900, 3600)
+
+
+def _check_interval(v: int | None) -> int | None:
+    if v is not None and v not in INTERVAL_BUCKETS:
+        raise ValueError(f"interval_secs must be one of {INTERVAL_BUCKETS}")
+    return v
+
+
 class MonitorCreate(BaseModel):
     name: str = Field(min_length=1, max_length=120)
     url: HttpUrl
@@ -22,6 +31,11 @@ class MonitorCreate(BaseModel):
     timeout_ms: int = Field(default=10_000, ge=100, le=60_000)
     degraded_ms: int = Field(default=1_000, gt=0)
     is_active: bool = True
+
+    @field_validator("interval_secs")
+    @classmethod
+    def interval_bucket(cls, v: int) -> int:
+        return _check_interval(v)
 
     @field_validator("url")
     @classmethod
@@ -42,6 +56,11 @@ class MonitorUpdate(BaseModel):
     degraded_ms: int | None = Field(default=None, gt=0)
     is_active: bool | None = None
 
+    @field_validator("interval_secs")
+    @classmethod
+    def interval_bucket(cls, v: int | None) -> int | None:
+        return _check_interval(v)
+
 
 class MonitorOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -57,6 +76,7 @@ class MonitorOut(BaseModel):
     created_at: datetime
     ssl_expires_at: datetime | None = None
     ssl_error: str | None = None
+    is_sandbox: bool = False
 
 
 class CheckOut(BaseModel):
@@ -148,3 +168,4 @@ class StatusPageOut(BaseModel):
     title: str
     description: str | None
     monitor_ids: list[int]
+    is_sandbox: bool = False

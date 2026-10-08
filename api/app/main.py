@@ -9,7 +9,8 @@ from sqlalchemy import text
 
 from .config import get_settings
 from .db import SessionLocal, engine
-from .routers import alerts, checks, incidents, monitors, reports, status, status_pages
+from .models import NIL_USER
+from .routers import alerts, checks, incidents, monitors, reports, session, status, status_pages
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s %(levelname)-7s %(name)s: %(message)s"
@@ -25,7 +26,16 @@ async def lifespan(app: FastAPI):
     # Idempotent, so running it on every boot costs nothing.
     async with SessionLocal() as session:
         await session.execute(text("SELECT ensure_checks_partition(now()::date)"))
+        # Data created before auth existed belongs to the owner.
+        if settings.owner_user_id:
+            for table in ("monitors", "status_pages"):
+                await session.execute(
+                    text(f"UPDATE {table} SET user_id = :owner WHERE user_id = :nil"),
+                    {"owner": settings.owner_user_id, "nil": str(NIL_USER)},
+                )
         await session.commit()
+    if not settings.supabase_url:
+        log.warning("SUPABASE_URL not set -- auth is OFF, every request is the owner")
 
     from .checker import scheduler
 
@@ -60,6 +70,7 @@ app.include_router(status.router)
 app.include_router(alerts.router)
 app.include_router(status_pages.router)
 app.include_router(reports.router)
+app.include_router(session.router)
 
 
 @app.get("/api/health")

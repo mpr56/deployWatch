@@ -70,6 +70,14 @@ class Monitor(Base):
         DateTime(timezone=True), nullable=True
     )
 
+    @property
+    def is_sandbox(self) -> bool:
+        """Created by a sandbox user rather than the owner (see app/auth.py)."""
+        from .config import get_settings
+
+        owner = get_settings().owner_user_id
+        return self.user_id != (uuid.UUID(owner) if owner else NIL_USER)
+
     checks: Mapped[list[Check]] = relationship(
         back_populates="monitor", cascade="all, delete-orphan"
     )
@@ -151,6 +159,7 @@ class StatusPage(Base):
     __tablename__ = "status_pages"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), default=NIL_USER)
     slug: Mapped[str] = mapped_column(Text, unique=True)
     title: Mapped[str] = mapped_column(Text)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -183,3 +192,12 @@ class DailyUptime(Base):
     degraded: Mapped[int] = mapped_column(Integer)
     down: Mapped[int] = mapped_column(Integer)
     avg_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+
+class SandboxSession(Base):
+    __tablename__ = "sandbox_sessions"
+
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    started_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )

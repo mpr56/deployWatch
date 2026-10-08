@@ -7,6 +7,7 @@
 import { Link } from "react-router-dom";
 
 import { useDeleteMonitor } from "../lib/api";
+import { useAuth } from "../lib/auth";
 import { confirmDelete } from "../lib/confirm";
 import { ms, uptime } from "../lib/format";
 import { sslWarning } from "../lib/ssl";
@@ -18,14 +19,17 @@ import { StatusDot } from "./StatusDot";
 export function MonitorRow({ monitor }: { monitor: MonitorSummary }) {
   const status = monitor.current_status;
   const del = useDeleteMonitor();
+  const { canEdit, guard, role } = useAuth();
+  // Sandbox users can only delete what they made; the admin's rows are read-only.
+  const isSandboxRow = role === "sandbox" && monitor.is_sandbox;
 
   const onDelete = (e: React.MouseEvent) => {
     // The whole row is a link; keep the click from navigating.
     e.preventDefault();
     e.stopPropagation();
-    if (confirmDelete(monitor.name)) {
-      del.mutate(monitor.id);
-    }
+    guard(() => {
+      if (confirmDelete(monitor.name)) del.mutate(monitor.id);
+    });
   };
 
   const ssl = sslWarning(monitor.ssl_expires_at, monitor.ssl_error);
@@ -45,6 +49,7 @@ export function MonitorRow({ monitor }: { monitor: MonitorSummary }) {
         <div className="row__text">
           <div className="row__name">
             {monitor.name}
+            {monitor.is_sandbox && <span className="sandbox-tag">sandbox</span>}
             {ssl && <span className="ssl-badge">{ssl}</span>}
           </div>
           <div className="row__url">{monitor.url.replace(/^https?:\/\//, "")}</div>
@@ -65,6 +70,7 @@ export function MonitorRow({ monitor }: { monitor: MonitorSummary }) {
       </div>
 
       <div className="row__actions">
+        {(!canEdit || role === "owner" || isSandboxRow) && (
         <button
           className="btn btn--sm btn--danger"
           onClick={onDelete}
@@ -73,6 +79,7 @@ export function MonitorRow({ monitor }: { monitor: MonitorSummary }) {
         >
           Delete
         </button>
+        )}
       </div>
     </Link>
   );
