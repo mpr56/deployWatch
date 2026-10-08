@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import {
   Link,
   NavLink,
@@ -38,13 +39,32 @@ function AppShell() {
   const onDashboard = location.pathname === "/";
   const { canEdit, openGate, role } = useAuth();
 
+  // Below 900px the sidebar collapses into a header with a burger menu.
+  const [menuOpen, setMenuOpen] = useState(false);
+  useEffect(() => setMenuOpen(false), [location.pathname]);
+
   return (
     <div className="app">
-      <nav className="sidebar">
+      <nav className={menuOpen ? "sidebar sidebar--open" : "sidebar"}>
         <Link to="/" className="sidebar__brand">
           <span className="sidebar__logo">D</span>
           Deploy Watch
         </Link>
+        <button
+          className="sidebar__burger"
+          aria-label={menuOpen ? "Close menu" : "Open menu"}
+          aria-expanded={menuOpen}
+          onClick={() => setMenuOpen((o) => !o)}
+        >
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+            {menuOpen ? (
+              <path d="M4 4l12 12M16 4L4 16" />
+            ) : (
+              <path d="M3 5.5h14M3 10h14M3 14.5h14" />
+            )}
+          </svg>
+        </button>
+        <div className="sidebar__links">
         <NavLink
           to="/"
           end
@@ -104,6 +124,7 @@ function AppShell() {
             <span>Add monitor</span>
           </button>
         )}
+        </div>
         <div className="sidebar__foot">
           refreshing every 30s
         </div>
