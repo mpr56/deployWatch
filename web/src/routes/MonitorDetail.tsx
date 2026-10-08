@@ -18,6 +18,7 @@ import {
 } from "recharts";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
+import { AlertsPanel } from "../components/AlertsPanel";
 import { StatusDot } from "../components/StatusDot";
 import { confirmDelete } from "../lib/confirm";
 import {
@@ -26,13 +27,14 @@ import {
   useChecks,
   useDeleteMonitor, useIncidents, useMonitor } from "../lib/api";
 import { duration, ms, relativeTime, uptime } from "../lib/format";
+import { sslDaysLeft, sslWarning } from "../lib/ssl";
 import type { TimeRange } from "../types";
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
     <div className="stat">
-      <div className="stat__value">{value}</div>
       <div className="stat__label">{label}</div>
+      <div className="stat__value">{value}</div>
     </div>
   );
 }
@@ -72,6 +74,14 @@ export function MonitorDetail() {
             </a>{" "}
             · every {monitor.data.interval_secs}s · expects{" "}
             {monitor.data.expected_status}
+            {monitor.data.ssl_expires_at && !sslWarning(monitor.data.ssl_expires_at, null) && (
+              <> · SSL valid {sslDaysLeft(monitor.data.ssl_expires_at)}d</>
+            )}
+            {sslWarning(monitor.data.ssl_expires_at, monitor.data.ssl_error) && (
+              <span className="ssl-badge">
+                {sslWarning(monitor.data.ssl_expires_at, monitor.data.ssl_error)}
+              </span>
+            )}
           </p>
         </div>
         <div className="page__actions">
@@ -191,6 +201,8 @@ export function MonitorDetail() {
           </tbody>
         </table>
       </section>
+
+      <AlertsPanel monitorId={id} />
 
       <section className="panel">
         <h2>Incidents</h2>

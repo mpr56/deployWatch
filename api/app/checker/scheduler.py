@@ -34,7 +34,7 @@ def start() -> AsyncIOScheduler:
     Returns the scheduler so main.py can shut it down cleanly.
     """
     global _scheduler
-    scheduler = AsyncIOScheduler()
+    scheduler = AsyncIOScheduler(timezone="UTC")
 
     for bucket in INTERVAL_BUCKETS:
         scheduler.add_job(
@@ -56,6 +56,19 @@ def start() -> AsyncIOScheduler:
         max_instances=1,
         coalesce=True,
     )
+
+    # v3: nightly uptime rollup (and a 90-day backfill on boot), SSL expiry
+    # twice a day (and once shortly after boot).
+    from datetime import datetime, timedelta, timezone
+
+    from ..jobs import rollup, ssl_check
+
+    soon = datetime.now(timezone.utc) + timedelta(seconds=20)
+    scheduler.add_job(rollup.rollup, "cron", hour=0, minute=10, args=[2],
+                      id="rollup-nightly", max_instances=1, coalesce=True)
+    scheduler.add_job(rollup.rollup, "date", run_date=soon, args=[90], id="rollup-backfill")
+    scheduler.add_job(ssl_check.check_all, "interval", hours=12, next_run_time=soon,
+                      id="ssl-check", max_instances=1, coalesce=True)
 
     scheduler.start()
     _scheduler = scheduler

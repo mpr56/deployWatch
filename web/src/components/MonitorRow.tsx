@@ -1,17 +1,16 @@
-// The atom of the whole product.
+// The atom of the whole product: one monitor, one line.
 //
-// The sparkline, status dot and metric layout here get reused on the monitor
-// detail screen and (in a different visual language) on the public status page.
-// Get this right and the rest composes from it.
-//
-// Bone structure only -- classNames are hooks for your own visual treatment.
+// Dot + name + URL, last response, 24h uptime, then the last 30 checks as
+// bars. Broken rows get a tinted background and a coloured left edge so they
+// read from across the room before you read a word.
 
 import { Link } from "react-router-dom";
 
 import { useDeleteMonitor } from "../lib/api";
 import { confirmDelete } from "../lib/confirm";
-import { ms, relativeTime, uptime } from "../lib/format";
-import { statusLabel } from "../lib/status";
+import { ms, uptime } from "../lib/format";
+import { sslWarning } from "../lib/ssl";
+import { statusColor } from "../lib/status";
 import type { MonitorSummary } from "../types";
 import { Sparkline } from "./Sparkline";
 import { StatusDot } from "./StatusDot";
@@ -29,49 +28,52 @@ export function MonitorRow({ monitor }: { monitor: MonitorSummary }) {
     }
   };
 
+  const ssl = sslWarning(monitor.ssl_expires_at, monitor.ssl_error);
+
+  const resp =
+    status === "down" && monitor.last_response_time_ms == null
+      ? "failed"
+      : ms(monitor.last_response_time_ms);
+
   return (
     <Link
       to={`/monitors/${monitor.id}`}
       className={`row row--${status ?? "unknown"}`}
     >
-      <div className="row__status">
-        <StatusDot status={status} />
+      <div className="row__identity">
+        <StatusDot status={status} size={8} halo />
+        <div className="row__text">
+          <div className="row__name">
+            {monitor.name}
+            {ssl && <span className="ssl-badge">{ssl}</span>}
+          </div>
+          <div className="row__url">{monitor.url.replace(/^https?:\/\//, "")}</div>
+        </div>
       </div>
 
-      <div className="row__identity">
-        <div className="row__name">{monitor.name}</div>
-        <div className="row__url">{monitor.url}</div>
+      <div
+        className="row__resp"
+        style={{ color: status && status !== "up" ? statusColor(status) : undefined }}
+      >
+        {resp}
       </div>
+
+      <div className="row__uptime">{uptime(monitor.uptime_24h)}</div>
 
       <div className="row__spark">
         <Sparkline data={monitor.sparkline} />
       </div>
 
-      <div className="row__metric">
-        <div className="row__metric-value">
-          {ms(monitor.last_response_time_ms)}
-        </div>
-        <div className="row__metric-label">response</div>
+      <div className="row__actions">
+        <button
+          className="btn btn--sm btn--danger"
+          onClick={onDelete}
+          disabled={del.isPending}
+          aria-label={`Delete ${monitor.name}`}
+        >
+          Delete
+        </button>
       </div>
-
-      <div className="row__metric">
-        <div className="row__metric-value">{uptime(monitor.uptime_24h)}</div>
-        <div className="row__metric-label">24h uptime</div>
-      </div>
-
-      <div className="row__meta">
-        <div className="row__state">{statusLabel(status)}</div>
-        <div className="row__checked">{relativeTime(monitor.last_checked_at)}</div>
-      </div>
-
-      <button
-        className="btn btn--danger"
-        onClick={onDelete}
-        disabled={del.isPending}
-        aria-label={`Delete ${monitor.name}`}
-      >
-        Delete
-      </button>
     </Link>
   );
 }

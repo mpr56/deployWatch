@@ -7,3 +7,4 @@ pydantic>=2.9
 pydantic-settings>=2.6
 httpx>=0.28
 apscheduler>=3.11
+aiosmtplib>=3.0

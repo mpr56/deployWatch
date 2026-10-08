@@ -18,6 +18,11 @@ class Settings(BaseSettings):
 
     smtp_host: str = "localhost"
     smtp_port: int = 1025
+    # Mailpit needs none of these. A real provider (Resend, Brevo, Gmail...)
+    # needs username/password and usually STARTTLS on port 587.
+    smtp_username: str = ""
+    smtp_password: str = ""
+    smtp_starttls: bool = False
     alert_from: str = "alerts@deploywatch.local"
 
     @property

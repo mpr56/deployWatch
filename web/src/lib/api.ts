@@ -11,6 +11,11 @@ import {
 } from "@tanstack/react-query";
 
 import type {
+  MonthlyReport,
+  PublicStatus,
+  StatusPageConfig,
+  AlertConfig,
+  AlertChannel,
   Check,
   CheckStats,
   SeriesPoint,
@@ -59,6 +64,7 @@ export function useMonitor(id: number) {
   return useQuery({
     queryKey: ["monitor", id],
     queryFn: () => request<Monitor>(`/monitors/${id}`),
+    enabled: id > 0,
   });
 }
 
@@ -94,6 +100,7 @@ export function useCheckSeries(monitorId: number, range: TimeRange = "24h") {
 export function useIncidents(monitorId?: number) {
   return useQuery({
     queryKey: ["incidents", monitorId ?? "all"],
+    refetchInterval: 30_000,
     queryFn: () =>
       request<Incident[]>(
         monitorId ? `/incidents?monitor_id=${monitorId}` : "/incidents",
@@ -147,5 +154,105 @@ export function useTestMonitor() {
         method: "POST",
         body: JSON.stringify(body),
       }),
+  });
+}
+
+// --- incidents & alerts ----------------------------------------------------
+
+export function useIncident(id: number) {
+  return useQuery({
+    queryKey: ["incident", id],
+    queryFn: () => request<Incident>(`/incidents/${id}`),
+    refetchInterval: 30_000,
+  });
+}
+
+export function useIncidentChecks(id: number) {
+  return useQuery({
+    queryKey: ["incident-checks", id],
+    queryFn: () => request<Check[]>(`/incidents/${id}/checks`),
+    refetchInterval: 30_000,
+  });
+}
+
+export function useAlerts(monitorId: number) {
+  return useQuery({
+    queryKey: ["alerts", monitorId],
+    queryFn: () => request<AlertConfig[]>(`/monitors/${monitorId}/alerts`),
+  });
+}
+
+export function useCreateAlert(monitorId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { channel: AlertChannel; destination: string }) =>
+      request<AlertConfig>(`/monitors/${monitorId}/alerts`, {
+        method: "POST",
+        body: JSON.stringify(body),
+      }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["alerts", monitorId] }),
+  });
+}
+
+export function useDeleteAlert(monitorId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => request<void>(`/alerts/${id}`, { method: "DELETE" }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["alerts", monitorId] }),
+  });
+}
+
+export function useTestAlert() {
+  return useMutation({
+    mutationFn: (id: number) =>
+      request<{ ok: boolean }>(`/alerts/${id}/test`, { method: "POST" }),
+  });
+}
+
+// --- v3: status pages & reports --------------------------------------------
+
+export function usePublicStatus(slug: string) {
+  return useQuery({
+    queryKey: ["public-status", slug],
+    queryFn: () => request<PublicStatus>(`/status/${slug}`),
+    refetchInterval: 60_000,
+    retry: false,
+  });
+}
+
+export function useStatusPages() {
+  return useQuery({
+    queryKey: ["status-pages"],
+    queryFn: () => request<StatusPageConfig[]>("/status-pages"),
+  });
+}
+
+type StatusPageBody = Omit<StatusPageConfig, "id">;
+
+export function useSaveStatusPage() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...body }: StatusPageBody & { id?: number }) =>
+      request<StatusPageConfig>(id ? `/status-pages/${id}` : "/status-pages", {
+        method: id ? "PUT" : "POST",
+        body: JSON.stringify(body),
+      }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["status-pages"] }),
+  });
+}
+
+export function useDeleteStatusPage() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) =>
+      request<void>(`/status-pages/${id}`, { method: "DELETE" }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["status-pages"] }),
+  });
+}
+
+export function useMonthlyReport(month: string, sla: number) {
+  return useQuery({
+    queryKey: ["report", month, sla],
+    queryFn: () => request<MonthlyReport>(`/reports/monthly?month=${month}&sla=${sla}`),
   });
 }
