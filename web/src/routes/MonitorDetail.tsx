@@ -6,10 +6,11 @@
 // api/app/routers/checks.py.
 
 import { useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 
 import { StatusDot } from "../components/StatusDot";
-import { useChecks, useIncidents, useMonitor } from "../lib/api";
+import { confirmDelete } from "../lib/confirm";
+import { useChecks, useDeleteMonitor, useIncidents, useMonitor } from "../lib/api";
 import { duration, ms, relativeTime } from "../lib/format";
 import type { TimeRange } from "../types";
 
@@ -22,6 +23,8 @@ export function MonitorDetail() {
   const monitor = useMonitor(id);
   const checks = useChecks(id, range);
   const incidents = useIncidents(id);
+  const del = useDeleteMonitor();
+  const navigate = useNavigate();
 
   if (monitor.isLoading) return <div className="page">Loading…</div>;
   if (!monitor.data) return <div className="page error">Not found</div>;
@@ -43,6 +46,17 @@ export function MonitorDetail() {
           <Link to={`/monitors/${id}/edit`} className="btn">
             Edit
           </Link>
+          <button
+            className="btn btn--danger"
+            disabled={del.isPending}
+            onClick={() => {
+              if (confirmDelete(monitor.data!.name)) {
+                del.mutate(id, { onSuccess: () => navigate("/") });
+              }
+            }}
+          >
+            Delete
+          </button>
         </div>
       </header>
 

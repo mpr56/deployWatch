@@ -58,8 +58,14 @@ code {
 /* --- shell --------------------------------------------------------------- */
 
 .nav {
+  display: flex;
+  align-items: center;
+  gap: 16px;
   border-bottom: 1px solid var(--border);
   padding: 14px 24px;
+}
+.nav__back {
+  padding: 4px 10px;
 }
 .nav__brand {
   font-weight: 600;
@@ -122,6 +128,12 @@ code {
   color: var(--bg);
   border-color: var(--text);
 }
+.btn--danger {
+  color: var(--status-down);
+}
+.btn--danger:hover {
+  border-color: var(--status-down);
+}
 .btn--active {
   border-color: var(--text-dim);
 }
@@ -165,7 +177,7 @@ code {
 
 .row {
   display: grid;
-  grid-template-columns: 20px minmax(0, 1fr) 130px 100px 100px 120px;
+  grid-template-columns: 20px minmax(0, 1fr) 130px 100px 100px 120px auto;
   align-items: center;
   gap: 16px;
   padding: 14px 16px;
@@ -213,7 +225,7 @@ code {
 
 @media (max-width: 860px) {
   .row {
-    grid-template-columns: 20px minmax(0, 1fr) 100px;
+    grid-template-columns: 20px minmax(0, 1fr) 90px 90px auto;
   }
   .row__spark,
   .row__meta {

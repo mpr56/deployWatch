@@ -1,19 +1,24 @@
 """The checker. One async loop, bounded concurrency, no threads.
 
-The whole design constraint: 500 monitors must be the same process shape as 5.
-That means no thread per monitor and no task-per-monitor fan-out without a
-ceiling -- one event loop, asyncio.gather over a semaphore, one shared
-httpx.AsyncClient so connections get reused.
-
-`classify` below is written for you as a worked example of the three-state
-rule. The two functions after it are yours.
+500 monitors must be the same process shape as 5: one event loop, gather over
+a semaphore, one shared httpx.AsyncClient so connections get reused.
 """
 
 from __future__ import annotations
 
+import asyncio
+import logging
+import time
 from dataclasses import dataclass
 
-from ..models import CheckStatus
+import httpx
+from sqlalchemy import insert, select
+
+from ..config import get_settings
+from ..db import SessionLocal
+from ..models import Check, CheckStatus, Monitor
+
+log = logging.getLogger("deploywatch.checker")
 
 
 @dataclass(slots=True)
@@ -56,53 +61,114 @@ async def run_check(
 ) -> CheckResult:
     """Perform exactly one HTTP check. Never raises -- a failure IS the result.
 
-    TODO (you). Roughly:
-      1. `time.perf_counter()` before and after. Measure the request only.
-      2. `await client.get(url, timeout=timeout_ms / 1000, follow_redirects=True)`
-      3. Return `classify(...)` on success.
-      4. Catch `httpx.TimeoutException`, `httpx.RequestError`, and a bare
-         `Exception` last. Each returns CheckStatus.down with a short,
-         human-readable error_message -- that string is what shows up as the
-         incident's "cause", so "connection refused" beats
-         "ConnectError(...)" with a stack trace in it.
-
-    Two things that will bite you:
-      - `client=None` means "make your own" -- that path is for the "Test now"
-        button, which runs a single check with no pool. The scheduler passes a
-        shared client in. Do not create a client per check in the hot path.
-      - A timeout is `down` with `response_time_ms=None`, not
-        `response_time_ms=timeout_ms`. Recording the timeout value as a real
-        timing quietly poisons every percentile you compute later.
+    A timeout is `down` with response_time_ms=None, not the timeout value.
+    client=None makes a throwaway client (the "Test now" path).
     """
-    raise NotImplementedError("app/checker/engine.py:run_check")
+    own_client = client is None
+    if own_client:
+        client = httpx.AsyncClient()
+
+    started = time.perf_counter()
+    try:
+        resp = await client.get(
+            url, timeout=timeout_ms / 1000, follow_redirects=True
+        )
+        elapsed_ms = int((time.perf_counter() - started) * 1000)
+        return CheckResult(
+            status=classify(resp.status_code, elapsed_ms, expected_status, degraded_ms),
+            status_code=resp.status_code,
+            response_time_ms=elapsed_ms,
+            error_message=(
+                None
+                if resp.status_code == expected_status
+                else f"expected {expected_status}, got {resp.status_code}"
+            ),
+        )
+    except httpx.TimeoutException:
+        return CheckResult(
+            status=CheckStatus.down,
+            error_message=f"timed out after {timeout_ms / 1000:g}s",
+        )
+    except httpx.ConnectError as exc:
+        return CheckResult(
+            status=CheckStatus.down, error_message=_connect_message(exc)
+        )
+    except httpx.RequestError as exc:
+        return CheckResult(
+            status=CheckStatus.down,
+            error_message=str(exc) or type(exc).__name__,
+        )
+    except Exception as exc:  # run_check never raises
+        return CheckResult(
+            status=CheckStatus.down,
+            error_message=f"{type(exc).__name__}: {exc}",
+        )
+    finally:
+        if own_client:
+            await client.aclose()
+
+
+def _connect_message(exc: httpx.ConnectError) -> str:
+    text = str(exc).lower()
+    if "refused" in text or "all connection attempts failed" in text:
+        return "connection refused"
+    if "name or service not known" in text or "nodename nor servname" in text:
+        return "DNS lookup failed"
+    if "ssl" in text or "certificate" in text:
+        return "TLS error"
+    return str(exc) or "connection failed"
 
 
 async def run_due_checks(monitor_ids: list[int]) -> int:
     """Check a batch of monitors concurrently and persist the results.
 
     Returns how many checks were written.
+    """
+    if not monitor_ids:
+        return 0
 
-    TODO (you). The shape:
+    async with SessionLocal() as session:
+        monitors = (
+            await session.scalars(
+                select(Monitor).where(
+                    Monitor.id.in_(monitor_ids), Monitor.is_active.is_(True)
+                )
+            )
+        ).all()
+        if not monitors:
+            return 0
 
-        sem = asyncio.Semaphore(settings.checker_concurrency)
+        sem = asyncio.Semaphore(get_settings().checker_concurrency)
 
         async with httpx.AsyncClient() as client:
-            async def one(monitor):
+
+            async def one(m: Monitor) -> tuple[Monitor, CheckResult]:
                 async with sem:
-                    return monitor, await run_check(..., client=client)
+                    result = await run_check(
+                        m.url,
+                        m.timeout_ms,
+                        m.expected_status,
+                        m.degraded_ms,
+                        client=client,
+                    )
+                return m, result
 
             results = await asyncio.gather(*(one(m) for m in monitors))
 
-    Then bulk-insert every result in ONE statement -- not one INSERT per
-    monitor. `session.execute(insert(Check), [dict, dict, ...])` does it.
+        await session.execute(
+            insert(Check),
+            [
+                {
+                    "monitor_id": m.id,
+                    "status": r.status,
+                    "response_time_ms": r.response_time_ms,
+                    "status_code": r.status_code,
+                    "error_message": r.error_message,
+                }
+                for m, r in results
+            ],
+        )
+        await session.commit()
 
-    After the write, hand each (monitor, result) to detector.evaluate() so
-    incidents open and close. Do that after the checks are committed: an
-    incident that references checks not yet in the database is a race you will
-    debug at 2am.
-
-    Watch out for: one slow monitor must not delay the others. gather already
-    gives you that, as long as every check has its own timeout and run_check
-    genuinely never raises -- one exception escaping gather kills the batch.
-    """
-    raise NotImplementedError("app/checker/engine.py:run_due_checks")
+    # v2: detector.evaluate(m, r) for each (m, r) goes here, after the commit.
+    return len(results)

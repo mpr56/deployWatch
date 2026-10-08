@@ -1,4 +1,11 @@
-import { Link, Outlet, Route, Routes } from "react-router-dom";
+import {
+  Link,
+  Outlet,
+  Route,
+  Routes,
+  useLocation,
+  useNavigate,
+} from "react-router-dom";
 
 import { Dashboard } from "./routes/Dashboard";
 import { IncidentDetail } from "./routes/IncidentDetail";
@@ -7,9 +14,22 @@ import { MonitorForm } from "./routes/MonitorForm";
 import { StatusPage } from "./routes/StatusPage";
 
 function AppShell() {
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  // key === "default" means this is the first page in the session, so there
+  // is no history entry to go back to; fall back to the dashboard.
+  const goBack = () =>
+    location.key === "default" ? navigate("/") : navigate(-1);
+
   return (
     <div className="app">
       <nav className="nav">
+        {location.pathname !== "/" && (
+          <button className="btn nav__back" onClick={goBack}>
+            ← Back
+          </button>
+        )}
         <Link to="/" className="nav__brand">
           DeployWatch
         </Link>

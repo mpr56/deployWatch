@@ -8,6 +8,8 @@
 
 import { Link } from "react-router-dom";
 
+import { useDeleteMonitor } from "../lib/api";
+import { confirmDelete } from "../lib/confirm";
 import { ms, relativeTime, uptime } from "../lib/format";
 import { statusLabel } from "../lib/status";
 import type { MonitorSummary } from "../types";
@@ -16,6 +18,16 @@ import { StatusDot } from "./StatusDot";
 
 export function MonitorRow({ monitor }: { monitor: MonitorSummary }) {
   const status = monitor.current_status;
+  const del = useDeleteMonitor();
+
+  const onDelete = (e: React.MouseEvent) => {
+    // The whole row is a link; keep the click from navigating.
+    e.preventDefault();
+    e.stopPropagation();
+    if (confirmDelete(monitor.name)) {
+      del.mutate(monitor.id);
+    }
+  };
 
   return (
     <Link
@@ -51,6 +63,15 @@ export function MonitorRow({ monitor }: { monitor: MonitorSummary }) {
         <div className="row__state">{statusLabel(status)}</div>
         <div className="row__checked">{relativeTime(monitor.last_checked_at)}</div>
       </div>
+
+      <button
+        className="btn btn--danger"
+        onClick={onDelete}
+        disabled={del.isPending}
+        aria-label={`Delete ${monitor.name}`}
+      >
+        Delete
+      </button>
     </Link>
   );
 }

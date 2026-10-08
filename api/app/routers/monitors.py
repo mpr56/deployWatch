@@ -7,6 +7,8 @@ copy.
 
 from __future__ import annotations
 
+from dataclasses import asdict
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import delete, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -168,4 +170,4 @@ async def test_monitor(payload: MonitorCreate) -> TestCheckResult:
         expected_status=payload.expected_status,
         degraded_ms=payload.degraded_ms,
     )
-    return TestCheckResult(**result.__dict__)
+    return TestCheckResult(**asdict(result))

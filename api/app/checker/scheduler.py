@@ -10,7 +10,16 @@ semaphore.
 
 from __future__ import annotations
 
+import logging
+
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from sqlalchemy import select, text
+
+from ..db import SessionLocal
+from ..models import Monitor
+from .engine import run_due_checks
+
+log = logging.getLogger("deploywatch.scheduler")
 
 # The interval values monitors are allowed to use. Constraining to a handful of
 # buckets is what keeps the job count constant as monitors grow.
@@ -22,22 +31,59 @@ _scheduler: AsyncIOScheduler | None = None
 def start() -> AsyncIOScheduler:
     """Create the scheduler and register one job per bucket.
 
-    TODO (you):
-      - `AsyncIOScheduler()`, then for each bucket in INTERVAL_BUCKETS add an
-        interval job calling a coroutine that (a) selects active monitors with
-        that interval_secs and (b) hands the ids to engine.run_due_checks.
-      - Pass `max_instances=1` and `coalesce=True` per job. Without those, a
-        batch that overruns its interval stacks up behind itself and you get a
-        thundering herd against your own monitored services.
-      - `misfire_grace_time` of about half the interval -- after a pause, run
-        once, do not replay every missed firing.
-      - Call ensure_checks_partition(now()) on a daily job. Writing into a
-        month with no partition fails the INSERT, and it fails at midnight on
-        the 1st, which is a bad time to find out.
-
     Returns the scheduler so main.py can shut it down cleanly.
     """
-    raise NotImplementedError("app/checker/scheduler.py:start")
+    global _scheduler
+    scheduler = AsyncIOScheduler()
+
+    for bucket in INTERVAL_BUCKETS:
+        scheduler.add_job(
+            _run_bucket,
+            "interval",
+            seconds=bucket,
+            args=[bucket],
+            id=f"checks-{bucket}s",
+            max_instances=1,
+            coalesce=True,
+            misfire_grace_time=max(bucket // 2, 1),
+        )
+
+    scheduler.add_job(
+        _ensure_partition,
+        "interval",
+        days=1,
+        id="ensure-partition",
+        max_instances=1,
+        coalesce=True,
+    )
+
+    scheduler.start()
+    _scheduler = scheduler
+    return scheduler
+
+
+async def _run_bucket(bucket: int) -> None:
+    async with SessionLocal() as session:
+        ids = list(
+            await session.scalars(
+                select(Monitor.id).where(
+                    Monitor.is_active.is_(True), Monitor.interval_secs == bucket
+                )
+            )
+        )
+    if not ids:
+        return
+    try:
+        written = await run_due_checks(ids)
+        log.info("bucket %ss: %d checks written", bucket, written)
+    except Exception:
+        log.exception("bucket %ss: batch failed", bucket)
+
+
+async def _ensure_partition() -> None:
+    async with SessionLocal() as session:
+        await session.execute(text("SELECT ensure_checks_partition(now()::date)"))
+        await session.commit()
 
 
 def shutdown() -> None:
