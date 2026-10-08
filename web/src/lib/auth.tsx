@@ -46,6 +46,9 @@ interface AuthState {
   clearNotice: () => void;
 }
 
+const NOT_CONFIGURED =
+  "Sign-in isn't configured for this build (VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY missing).";
+
 const AuthContext = createContext<AuthState | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -94,7 +97,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [me.data?.role, signOut]);
 
   const startSandbox = async () => {
-    if (!supabase) return;
+    if (!supabase) throw new Error(NOT_CONFIGURED);
     const { error } = await supabase.auth.signInAnonymously();
     if (error) throw error;
     await request("/sandbox/start", { method: "POST" });
@@ -103,14 +106,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signInWithPassword = async (email: string, password: string) => {
-    if (!supabase) return;
+    if (!supabase) throw new Error(NOT_CONFIGURED);
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) throw error;
     setGateOpen(false);
   };
 
   const signInWithGitHub = async () => {
-    if (!supabase) return;
+    if (!supabase) throw new Error(NOT_CONFIGURED);
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "github",
       options: { redirectTo: window.location.href },
