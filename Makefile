@@ -18,7 +18,7 @@ db-down:
 
 db-migrate:
 	docker exec -i deploywatch-db psql -U deploywatch -d deploywatch -v ON_ERROR_STOP=1 \
-		< api/migrations/001_init.sql
+		< api/migrations/001_init.sql && docker exec -i deploywatch-db psql -U deploywatch -d deploywatch -v ON_ERROR_STOP=1 < api/migrations/002_sent_alerts.sql
 
 db-shell:
 	docker exec -it deploywatch-db psql -U deploywatch -d deploywatch

@@ -170,5 +170,14 @@ async def run_due_checks(monitor_ids: list[int]) -> int:
         )
         await session.commit()
 
-    # v2: detector.evaluate(m, r) for each (m, r) goes here, after the commit.
+    # Incidents are evaluated after the checks are committed, one monitor at a
+    # time. A detector or alert failure must never lose the batch.
+    from .detector import evaluate
+
+    for m, r in results:
+        try:
+            await evaluate(m.id, r.status)
+        except Exception:
+            log.exception("incident evaluation failed for monitor %s", m.id)
+
     return len(results)

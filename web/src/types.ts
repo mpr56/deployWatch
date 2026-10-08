@@ -45,6 +45,16 @@ export interface Incident {
   checks_failed: number;
 }
 
+export type AlertChannel = "email" | "webhook";
+
+export interface AlertConfig {
+  id: number;
+  monitor_id: number;
+  channel: AlertChannel;
+  destination: string;
+  is_active: boolean;
+}
+
 export interface CheckStats {
   count: number;
   p50_ms: number | null;

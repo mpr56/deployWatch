@@ -121,3 +121,19 @@ class AlertConfig(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
+
+
+class SentAlert(Base):
+    __tablename__ = "sent_alerts"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    incident_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("incidents.id", ondelete="CASCADE")
+    )
+    alert_config_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("alert_configs.id", ondelete="CASCADE")
+    )
+    event: Mapped[str] = mapped_column(Text)
+    sent_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )

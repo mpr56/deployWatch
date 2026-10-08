@@ -6,12 +6,12 @@ Plumbing only. Nothing lands in this table until checker/detector.py exists.
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..db import get_session
-from ..models import Incident
-from ..schemas import IncidentOut
+from ..models import Check, Incident
+from ..schemas import CheckOut, IncidentOut
 
 router = APIRouter(prefix="/api/incidents", tags=["incidents"])
 
@@ -41,6 +41,28 @@ async def get_incident(
     return incident
 
 
-# TODO (you, v2): GET /api/incidents/{id}/checks
-# The failing checks between started_at and resolved_at -- that is the timeline
-# on the incident detail screen. One bounded range query over `checks`.
+@router.get("/{incident_id}/checks", response_model=list[CheckOut])
+async def incident_checks(
+    incident_id: int, session: AsyncSession = Depends(get_session)
+) -> list[Check]:
+    """Every check from the first failure to recovery (or now, if still open).
+
+    Includes the passing checks during a flap, so the timeline shows
+    down -> recovering -> down rather than hiding the noise.
+    """
+    incident = await session.get(Incident, incident_id)
+    if incident is None:
+        raise HTTPException(404, "incident not found")
+    end = incident.resolved_at or func.now()
+    return list(
+        await session.scalars(
+            select(Check)
+            .where(
+                Check.monitor_id == incident.monitor_id,
+                Check.checked_at >= incident.started_at,
+                Check.checked_at <= end,
+            )
+            .order_by(Check.checked_at.asc())
+            .limit(1000)
+        )
+    )

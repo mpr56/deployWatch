@@ -18,6 +18,7 @@ import {
 } from "recharts";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
+import { AlertsPanel } from "../components/AlertsPanel";
 import { StatusDot } from "../components/StatusDot";
 import { confirmDelete } from "../lib/confirm";
 import {
@@ -31,8 +32,8 @@ import type { TimeRange } from "../types";
 function Stat({ label, value }: { label: string; value: string }) {
   return (
     <div className="stat">
-      <div className="stat__value">{value}</div>
       <div className="stat__label">{label}</div>
+      <div className="stat__value">{value}</div>
     </div>
   );
 }
@@ -191,6 +192,8 @@ export function MonitorDetail() {
           </tbody>
         </table>
       </section>
+
+      <AlertsPanel monitorId={id} />
 
       <section className="panel">
         <h2>Incidents</h2>

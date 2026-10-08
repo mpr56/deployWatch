@@ -19,10 +19,10 @@ interface Props {
 export function Sparkline({
   data,
   slots = 30,
-  width = 120,
-  height = 28,
+  width = 176,
+  height = 26,
 }: Props) {
-  const gap = 1;
+  const gap = 1.5;
   const barWidth = (width - gap * (slots - 1)) / slots;
 
   // Right-align: the newest check is always the rightmost bar, so a
@@ -45,16 +45,29 @@ export function Sparkline({
         <rect
           key={i}
           x={i * (barWidth + gap)}
-          // Degraded and down bars are full height; up bars are shorter. A wall
-          // of failures should be visibly taller, not just differently coloured
-          // -- that is also what makes this readable without colour vision.
-          y={status === "up" ? height * 0.45 : 0}
+          // Height encodes severity as well as colour: up is short, degraded
+          // taller, down full height. A wall of failures should be visibly
+          // taller -- that is also what keeps it readable without colour vision.
+          y={height - height * barHeight(status)}
           width={barWidth}
-          height={status === "up" ? height * 0.55 : height}
+          height={height * barHeight(status)}
           rx={1}
           fill={status ? statusColor(status) : "var(--status-empty)"}
         />
       ))}
     </svg>
   );
+}
+
+function barHeight(status: CheckStatus | null): number {
+  switch (status) {
+    case "down":
+      return 1;
+    case "degraded":
+      return 0.72;
+    case "up":
+      return 0.42;
+    default:
+      return 0.2;
+  }
 }
