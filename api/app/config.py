@@ -14,6 +14,13 @@ class Settings(BaseSettings):
     incident_open_after: int = 3
     incident_close_after: int = 2
 
+    # Data retention (jobs/retention.py). Raw checks are dropped by whole
+    # monthly partition, so the real window is up to a month longer.
+    retention_checks_days: int = 30
+    retention_rollup_days: int = 400
+    retention_alerts_days: int = 90
+    retention_dry_run: bool = False
+
     # Auth (Supabase). Leave SUPABASE_URL empty to run with auth off locally.
     supabase_url: str = ""
     supabase_jwt_secret: str = ""  # only for legacy HS256 projects
