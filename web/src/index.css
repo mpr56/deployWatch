@@ -487,6 +487,8 @@ code {
 @media (max-width: 900px) {
   .app {
     grid-template-columns: 1fr;
+    /* Header row sizes to its content; main takes the rest of the viewport. */
+    grid-template-rows: auto 1fr;
   }
   .sidebar {
     position: sticky;
