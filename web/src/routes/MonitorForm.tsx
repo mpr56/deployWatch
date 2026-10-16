@@ -5,7 +5,7 @@
 // difference between confidently adding a monitor and adding a typo you find
 // out about an hour later.
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 import { StatusDot } from "../components/StatusDot";
@@ -67,17 +67,26 @@ export function MonitorForm() {
           : e.target.value,
     });
 
+  // Creating validates the URL server-side first, which takes a moment. The ref
+  // blocks repeat submits fired before React re-renders the disabled button.
+  const submitting = useRef(false);
+
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (submitting.current) return;
+    submitting.current = true;
     try {
       if (id) await update.mutateAsync(form);
       else await create.mutateAsync(form);
       navigate("/");
     } catch {
       // shown below via saveError
+    } finally {
+      submitting.current = false;
     }
   }
 
+  const saving = create.isPending || update.isPending;
   const saveError = create.error ?? update.error;
 
   if (!canEdit) {
@@ -157,8 +166,8 @@ export function MonitorForm() {
           >
             {test.isPending ? "Testing…" : "Test now"}
           </button>
-          <button type="submit" className="btn btn--primary">
-            {id ? "Save" : "Create monitor"}
+          <button type="submit" className="btn btn--primary" disabled={saving}>
+            {saving ? "Saving…" : id ? "Save" : "Create monitor"}
           </button>
         </div>
 
