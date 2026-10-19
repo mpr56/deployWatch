@@ -3,6 +3,10 @@
 
 export type CheckStatus = "up" | "degraded" | "down";
 
+// Must match HttpMethod in api/app/schemas.py.
+export const HTTP_METHODS = ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"] as const;
+export type HttpMethod = (typeof HTTP_METHODS)[number];
+
 export interface Monitor {
   id: number;
   name: string;
@@ -11,6 +15,10 @@ export interface Monitor {
   expected_status: number;
   timeout_ms: number;
   degraded_ms: number;
+  method: HttpMethod;
+  /** Values come back as "••••••" for monitors the caller cannot edit. */
+  headers: Record<string, string>;
+  body: string | null;
   is_active: boolean;
   created_at: string;
   ssl_expires_at: string | null;

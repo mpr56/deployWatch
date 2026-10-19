@@ -7,7 +7,9 @@ drift becomes annoying.
 
 from __future__ import annotations
 
+import re
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl, field_validator
 
@@ -16,11 +18,42 @@ from .models import AlertChannel, CheckStatus
 
 INTERVAL_BUCKETS = (30, 60, 300, 900, 3600)
 
+# Must match the method_known constraint in migrations/005_request_shape.sql.
+HttpMethod = Literal["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+
+MAX_HEADERS = 20
+MAX_BODY_CHARS = 16_384
+_HEADER_NAME = re.compile(r"^[A-Za-z0-9!#$%&'*+.^_`|~-]+$")  # RFC 9110 token
+# httpx computes these from the request itself; letting a monitor set them
+# only produces malformed requests.
+_RESERVED_HEADERS = {"content-length", "transfer-encoding", "connection"}
+
 
 def _check_interval(v: int | None) -> int | None:
     if v is not None and v not in INTERVAL_BUCKETS:
         raise ValueError(f"interval_secs must be one of {INTERVAL_BUCKETS}")
     return v
+
+
+def _check_headers(v: dict[str, str] | None) -> dict[str, str] | None:
+    if v is None:
+        return v
+    if len(v) > MAX_HEADERS:
+        raise ValueError(f"at most {MAX_HEADERS} headers")
+    for name, value in v.items():
+        if not _HEADER_NAME.match(name):
+            raise ValueError(f"invalid header name: {name!r}")
+        if name.lower() in _RESERVED_HEADERS:
+            raise ValueError(f"{name} is set automatically")
+        if "\r" in value or "\n" in value or len(value) > 4096:
+            raise ValueError(f"invalid value for header {name}")
+    return v
+
+
+def _check_body(v: str | None) -> str | None:
+    if v is not None and len(v) > MAX_BODY_CHARS:
+        raise ValueError(f"body must be at most {MAX_BODY_CHARS} characters")
+    return v or None  # an empty textarea means no body
 
 
 class MonitorCreate(BaseModel):
@@ -30,12 +63,18 @@ class MonitorCreate(BaseModel):
     expected_status: int = Field(default=200, ge=100, le=599)
     timeout_ms: int = Field(default=10_000, ge=100, le=60_000)
     degraded_ms: int = Field(default=1_000, gt=0)
+    method: HttpMethod = "GET"
+    headers: dict[str, str] = Field(default_factory=dict)
+    body: str | None = None
     is_active: bool = True
 
     @field_validator("interval_secs")
     @classmethod
     def interval_bucket(cls, v: int) -> int:
         return _check_interval(v)
+
+    headers_valid = field_validator("headers")(_check_headers)
+    body_valid = field_validator("body")(_check_body)
 
     @field_validator("url")
     @classmethod
@@ -54,12 +93,18 @@ class MonitorUpdate(BaseModel):
     expected_status: int | None = Field(default=None, ge=100, le=599)
     timeout_ms: int | None = Field(default=None, ge=100, le=60_000)
     degraded_ms: int | None = Field(default=None, gt=0)
+    method: HttpMethod | None = None
+    headers: dict[str, str] | None = None
+    body: str | None = None  # send null (or "") to clear
     is_active: bool | None = None
 
     @field_validator("interval_secs")
     @classmethod
     def interval_bucket(cls, v: int | None) -> int | None:
         return _check_interval(v)
+
+    headers_valid = field_validator("headers")(_check_headers)
+    body_valid = field_validator("body")(_check_body)
 
 
 class MonitorOut(BaseModel):
@@ -72,6 +117,11 @@ class MonitorOut(BaseModel):
     expected_status: int
     timeout_ms: int
     degraded_ms: int
+    method: str = "GET"
+    # Values are redacted for callers who cannot edit the monitor -- they
+    # usually hold API tokens. See routers/monitors.py:_redact.
+    headers: dict[str, str] = Field(default_factory=dict)
+    body: str | None = None
     is_active: bool
     created_at: datetime
     ssl_expires_at: datetime | None = None
