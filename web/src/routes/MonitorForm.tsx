@@ -17,6 +17,7 @@ import {
 } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { ms } from "../lib/format";
+import { HTTP_METHODS, type HttpMethod } from "../types";
 
 // Must match INTERVAL_BUCKETS in api/app/schemas.py -- the scheduler only runs these.
 const INTERVALS = [
@@ -34,7 +35,33 @@ const BLANK = {
   expected_status: 200,
   timeout_ms: 10_000,
   degraded_ms: 1_000,
+  method: "GET" as HttpMethod,
+  // Edited as "Name: value" lines so a header block pasted from curl or
+  // devtools just works. Parsed into an object on submit.
+  headers: "",
+  body: "",
 };
+
+// GET and HEAD requests carry no body; the field is hidden for them.
+const takesBody = (m: HttpMethod) => m !== "GET" && m !== "HEAD";
+
+function headersToText(h: Record<string, string>): string {
+  return Object.entries(h)
+    .map(([k, v]) => `${k}: ${v}`)
+    .join("\n");
+}
+
+function parseHeaders(text: string): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [i, raw] of text.split("\n").entries()) {
+    const line = raw.trim();
+    if (!line) continue;
+    const colon = line.indexOf(":");
+    if (colon < 1) throw new Error(`Header line ${i + 1} needs the form "Name: value"`);
+    out[line.slice(0, colon).trim()] = line.slice(colon + 1).trim();
+  }
+  return out;
+}
 
 export function MonitorForm() {
   const params = useParams();
@@ -43,12 +70,20 @@ export function MonitorForm() {
 
   const existing = useMonitor(id ?? 0);
   const [form, setForm] = useState(BLANK);
+  const [advanced, setAdvanced] = useState(false);
+  const [shapeError, setShapeError] = useState<string | null>(null);
 
   useEffect(() => {
     if (id && existing.data) {
-      const { name, url, interval_secs, expected_status, timeout_ms, degraded_ms } =
+      const { name, url, interval_secs, expected_status, timeout_ms, degraded_ms, method, headers, body } =
         existing.data;
-      setForm({ name, url, interval_secs, expected_status, timeout_ms, degraded_ms });
+      setForm({
+        name, url, interval_secs, expected_status, timeout_ms, degraded_ms, method,
+        headers: headersToText(headers),
+        body: body ?? "",
+      });
+      // Open the section when there is something in it to see.
+      if (method !== "GET" || Object.keys(headers).length || body) setAdvanced(true);
     }
   }, [id, existing.data]);
 
@@ -58,7 +93,9 @@ export function MonitorForm() {
 
   const { canEdit, openGate, role } = useAuth();
 
-  const set = (k: keyof typeof BLANK) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
+  const set =
+    (k: keyof typeof BLANK) =>
+    (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
     setForm({
       ...form,
       [k]:
@@ -67,6 +104,20 @@ export function MonitorForm() {
           : e.target.value,
     });
 
+  // The API wants headers as an object and no body on GET/HEAD. Returns null
+  // (and shows why) when the headers text does not parse.
+  function payload() {
+    try {
+      const headers = parseHeaders(form.headers);
+      setShapeError(null);
+      return { ...form, headers, body: takesBody(form.method) ? form.body : "" };
+    } catch (err) {
+      setShapeError((err as Error).message);
+      setAdvanced(true);
+      return null;
+    }
+  }
+
   // Creating validates the URL server-side first, which takes a moment. The ref
   // blocks repeat submits fired before React re-renders the disabled button.
   const submitting = useRef(false);
@@ -74,10 +125,12 @@ export function MonitorForm() {
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (submitting.current) return;
+    const body = payload();
+    if (!body) return;
     submitting.current = true;
     try {
-      if (id) await update.mutateAsync(form);
-      else await create.mutateAsync(form);
+      if (id) await update.mutateAsync(body);
+      else await create.mutateAsync(body);
       navigate("/");
     } catch {
       // shown below via saveError
@@ -157,12 +210,68 @@ export function MonitorForm() {
           </label>
         </div>
 
+        <button
+          type="button"
+          className="form__toggle"
+          aria-expanded={advanced}
+          onClick={() => setAdvanced(!advanced)}
+        >
+          {advanced ? "▾" : "▸"} Advanced request
+          {!advanced && form.method !== "GET" && <span className="form__hint"> · {form.method}</span>}
+        </button>
+
+        {advanced && (
+          <div className="form__advanced">
+            <div className="form__grid">
+              <label>
+                Method
+                <select value={form.method} onChange={set("method")}>
+                  {HTTP_METHODS.map((m) => (
+                    <option key={m}>{m}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <label>
+              Headers
+              <textarea
+                value={form.headers}
+                onChange={set("headers")}
+                rows={3}
+                spellCheck={false}
+                placeholder={"Authorization: Bearer <token>\nAccept: application/json"}
+              />
+              <span className="form__hint">
+                One per line. Only you can see the values; other viewers see them masked.
+              </span>
+            </label>
+            {takesBody(form.method) && (
+              <label>
+                Body
+                <textarea
+                  value={form.body}
+                  onChange={set("body")}
+                  rows={5}
+                  spellCheck={false}
+                  placeholder={'{"ping": true}'}
+                />
+                <span className="form__hint">
+                  Sent as-is. Add a Content-Type header to match, e.g. application/json.
+                </span>
+              </label>
+            )}
+          </div>
+        )}
+
         <div className="form__actions">
           <button
             type="button"
             className="btn"
             disabled={!form.url || test.isPending}
-            onClick={() => test.mutate(form)}
+            onClick={() => {
+              const body = payload();
+              if (body) test.mutate(body);
+            }}
           >
             {test.isPending ? "Testing…" : "Test now"}
           </button>
@@ -182,6 +291,7 @@ export function MonitorForm() {
           </div>
         )}
         {test.error && <div className="test-result error">{test.error.message}</div>}
+        {shapeError && <div className="error">{shapeError}</div>}
         {saveError && <div className="error">{saveError.message}</div>}
       </form>
     </div>

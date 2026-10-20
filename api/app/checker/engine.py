@@ -58,11 +58,16 @@ async def run_check(
     expected_status: int,
     degraded_ms: int,
     client=None,
+    method: str = "GET",
+    headers: dict[str, str] | None = None,
+    body: str | None = None,
 ) -> CheckResult:
     """Perform exactly one HTTP check. Never raises -- a failure IS the result.
 
     A timeout is `down` with response_time_ms=None, not the timeout value.
     client=None makes a throwaway client (the "Test now" path).
+    method/headers/body are the monitor's request shape; the defaults are a
+    plain GET, which is what every monitor did before they existed.
     """
     own_client = client is None
     if own_client:
@@ -70,8 +75,13 @@ async def run_check(
 
     started = time.perf_counter()
     try:
-        resp = await client.get(
-            url, timeout=timeout_ms / 1000, follow_redirects=True
+        resp = await client.request(
+            method,
+            url,
+            headers=headers or None,
+            content=body.encode() if body is not None else None,
+            timeout=timeout_ms / 1000,
+            follow_redirects=True,
         )
         elapsed_ms = int((time.perf_counter() - started) * 1000)
         return CheckResult(
@@ -150,6 +160,9 @@ async def run_due_checks(monitor_ids: list[int]) -> int:
                         m.expected_status,
                         m.degraded_ms,
                         client=client,
+                        method=m.method,
+                        headers=m.headers,
+                        body=m.body,
                     )
                 return m, result
 

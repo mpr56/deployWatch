@@ -21,7 +21,7 @@ from sqlalchemy import (
     Text,
     func,
 )
-from sqlalchemy.dialects.postgresql import ENUM, UUID
+from sqlalchemy.dialects.postgresql import ENUM, JSONB, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -58,6 +58,10 @@ class Monitor(Base):
     expected_status: Mapped[int] = mapped_column(Integer, default=200)
     timeout_ms: Mapped[int] = mapped_column(Integer, default=10_000)
     degraded_ms: Mapped[int] = mapped_column(Integer, default=1_000)
+    # Request shape (migrations/005_request_shape.sql).
+    method: Mapped[str] = mapped_column(Text, default="GET")
+    headers: Mapped[dict[str, str]] = mapped_column(JSONB, default=dict)
+    body: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()

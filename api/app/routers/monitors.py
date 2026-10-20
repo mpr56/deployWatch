@@ -19,6 +19,7 @@ from ..auth import (
     assert_public_url,
     editable_monitor,
     editor,
+    owned_by,
     owner_id,
     principal,
     visible_monitor,
@@ -37,6 +38,20 @@ from ..schemas import (
 router = APIRouter(prefix="/api/monitors", tags=["monitors"])
 
 SPARKLINE_POINTS = 30
+REDACTED = "••••••"
+
+
+def _redact(out: MonitorOut, p: Principal, user_id) -> MonitorOut:
+    """Hide request headers and body from callers who cannot edit the monitor.
+
+    Visitors and sandbox users can see the owner's monitors, and a monitor's
+    headers are where its API tokens live. Header names stay visible so the
+    shape of the check is still readable.
+    """
+    if not owned_by(p, user_id):
+        out.headers = {k: REDACTED for k in out.headers}
+        out.body = REDACTED if out.body else None
+    return out
 
 
 async def _get_or_404(session: AsyncSession, monitor_id: int) -> Monitor:
@@ -123,7 +138,7 @@ async def list_monitors(
     out = []
     for m in monitors:
         last = latest.get(m.id)
-        summary = MonitorSummary.model_validate(m)
+        summary = _redact(MonitorSummary.model_validate(m), p, m.user_id)
         summary.uptime_24h = uptime.get(m.id)
         summary.sparkline = spark.get(m.id, [])
         if last:
@@ -162,8 +177,9 @@ async def get_monitor(
     monitor_id: int,
     session: AsyncSession = Depends(get_session),
     p: Principal = Depends(principal),
-) -> Monitor:
-    return await visible_monitor(session, monitor_id, p)
+) -> MonitorOut:
+    m = await visible_monitor(session, monitor_id, p)
+    return _redact(MonitorOut.model_validate(m), p, m.user_id)
 
 
 @router.patch("/{monitor_id}", response_model=MonitorOut)
@@ -175,6 +191,8 @@ async def update_monitor(
 ) -> Monitor:
     monitor = await editable_monitor(session, monitor_id, p)
     changes = payload.model_dump(exclude_unset=True, mode="json")
+    if "headers" in changes and changes["headers"] is None:
+        changes["headers"] = {}  # null clears them; the column is NOT NULL
     if "url" in changes:
         await assert_public_url(changes["url"])
     if p.role == "sandbox" and changes.get("interval_secs", 60) < 60:
@@ -209,5 +227,8 @@ async def test_monitor(payload: MonitorCreate, p: Principal = Depends(editor)) -
         timeout_ms=payload.timeout_ms,
         expected_status=payload.expected_status,
         degraded_ms=payload.degraded_ms,
+        method=payload.method,
+        headers=payload.headers,
+        body=payload.body,
     )
     return TestCheckResult(**asdict(result))
